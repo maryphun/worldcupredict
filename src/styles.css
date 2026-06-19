@@ -667,6 +667,13 @@ label {
   margin-bottom: 14px;
 }
 
+.leaderboard-prize {
+  margin: 4px 0 0;
+  color: #5b6f91;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
 .small-button {
   min-height: 2.35rem;
   padding: 0 0.9rem;

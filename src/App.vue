@@ -381,7 +381,10 @@ function errorText(err: unknown) {
       <section class="utility-grid">
         <div class="stat-card leaderboard-card">
           <div class="section-head">
-            <h2>Coin leaderboard</h2>
+            <div>
+              <h2>Coin leaderboard</h2>
+              <p class="leaderboard-prize">第一名可以收穫一個「算你厲害」</p>
+            </div>
           </div>
           <ol class="leaderboard">
             <li v-for="(entry, index) in data.leaderboard" :key="entry.userId">
