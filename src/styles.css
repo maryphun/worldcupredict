@@ -447,6 +447,17 @@ h2 {
   color: #ffffff;
 }
 
+.bet-note {
+  margin: 0;
+  border: 1px solid rgba(47, 111, 228, 0.16);
+  border-radius: 16px;
+  padding: 10px 12px;
+  color: #4f6690;
+  background: #f3f7ff;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -728,6 +739,19 @@ small {
 .countdown-pill {
   grid-column: 3;
   justify-self: end;
+}
+
+.bet-count-pill {
+  grid-column: 1;
+  justify-self: start;
+  border: 1px solid rgba(47, 111, 228, 0.22);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #0b234a;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 18px rgba(7, 22, 47, 0.08);
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .status-pill {
@@ -1079,11 +1103,13 @@ small {
 
   .match-card-time,
   .match-card-header > .status-pill,
+  .bet-count-pill,
   .countdown-pill {
     grid-column: 1;
   }
 
   .match-card-header > .status-pill,
+  .bet-count-pill,
   .countdown-pill {
     justify-self: center;
   }

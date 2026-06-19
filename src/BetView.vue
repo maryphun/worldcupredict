@@ -36,6 +36,8 @@ const tokenAmount = computed(() => Number(tokenInput.value || 0));
 const maxBetTokens = computed(() => Math.max(0, Number(props.tokenBalance || 0) + Number(props.predictionDraft?.tokenAmount || 0)));
 const isOverBalance = computed(() => tokenAmount.value > maxBetTokens.value);
 const existingStake = computed(() => Number(props.predictionDraft?.tokenAmount || 0));
+const currentPickLabel = computed(() => pickOptions.value.find((option) => option.key === props.predictionDraft?.predictedResult)?.label || '');
+const isChangingPick = computed(() => Boolean(props.predictionDraft?.predictedResult && selectedPick.value && props.predictionDraft.predictedResult !== selectedPick.value));
 
 watch(
   () => props.predictionDraft,
@@ -145,6 +147,7 @@ function formatOdds(value: number | string | '') {
             <strong>{{ formatOdds(option.odds) }}</strong>
           </button>
         </div>
+        <p v-if="existingStake" class="bet-note">One active bet only. Confirming another pick replaces your {{ currentPickLabel }} bet.</p>
       </div>
 
       <form v-if="match.status === 'live'" class="score-slip" @submit.prevent="emit('reportScore', score.homeScore, score.awayScore, score.status)">
@@ -211,6 +214,7 @@ function formatOdds(value: number | string | '') {
         </div>
         <p class="token-pick">Pick: <strong>{{ pickOptions.find((option) => option.key === selectedPick)?.label }}</strong></p>
         <p class="token-help">Available to bet: <strong>{{ maxBetTokens }}</strong> coins</p>
+        <p v-if="isChangingPick" class="token-warning">This replaces your {{ currentPickLabel }} bet for this match.</p>
         <div class="token-display">{{ tokenInput || '0' }}</div>
         <p v-if="isOverBalance" class="token-warning">Not enough coins for this bet.</p>
         <div class="numpad" aria-label="Coin numpad">

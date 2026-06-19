@@ -227,16 +227,24 @@ function submitPrediction_(body) {
   var oddsAtPrediction = oddsForResult_(match, predictedResult);
 
   var predictions = table_(SHEETS.predictions);
-  var index = findIndex_(predictions.rows, function(p) {
+  var existingPredictions = predictions.rows.filter(function(p) {
     return p.userId === user.userId && p.matchId === match.matchId;
   });
-  var oldStake = index >= 0 ? Number(predictions.rows[index].tokenAmount || 0) : 0;
+  var oldStake = existingPredictions.reduce(function(total, prediction) {
+    return total + Number(prediction.tokenAmount || 0);
+  }, 0);
   var availableForThisBet = tokenBalance_(user, matches, predictions.rows) + oldStake;
   if (tokenAmount > availableForThisBet) throw new Error('Not enough coins for this bet.');
 
   var patch = { homeScore: '', awayScore: '', predictedResult: predictedResult, oddsAtPrediction: oddsAtPrediction, tokenAmount: tokenAmount, updatedAt: nowIso_() };
-  if (index >= 0) predictions.update(index, patch);
-  else predictions.append(Object.assign({ predictionId: Utilities.getUuid(), userId: user.userId, matchId: match.matchId }, patch));
+  var replacement = Object.assign({
+    predictionId: existingPredictions.length ? existingPredictions[0].predictionId : Utilities.getUuid(),
+    userId: user.userId,
+    matchId: match.matchId,
+  }, patch);
+  replaceRows_(SHEETS.predictions, predictions.rows.filter(function(p) {
+    return !(p.userId === user.userId && p.matchId === match.matchId);
+  }).concat([replacement]));
   audit_(user.userId, 'submitPrediction', match.matchId, patch);
   return snapshot_(body.token);
 }

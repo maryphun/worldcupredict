@@ -31,6 +31,15 @@ const betHistory = computed(() => data.value.betHistory ?? []);
 const visibleBetHistory = computed(() => betHistory.value.filter((entry) => isEntryWithinThreeDayWindow(entry)));
 const selectedMatch = computed(() => matches.value.find((match) => match.matchId === selectedMatchId.value));
 const selectedMatchEntries = computed(() => betHistory.value.filter((entry) => entry.matchId === selectedMatchId.value));
+const betCountsByMatch = computed(() => {
+  const bettorsByMatch = betHistory.value.reduce<Record<string, Set<string>>>((map, entry) => {
+    if (!map[entry.matchId]) map[entry.matchId] = new Set();
+    map[entry.matchId].add(entry.userId);
+    return map;
+  }, {});
+
+  return Object.fromEntries(Object.entries(bettorsByMatch).map(([matchId, bettors]) => [matchId, bettors.size]));
+});
 const currentMatches = computed(() => {
   if (activeView.value === 'matches') return mainMatches.value;
   if (activeView.value === 'previous') return previousMatches.value;
@@ -279,6 +288,11 @@ function statusText(status: string) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function betCountText(matchId: string) {
+  const count = betCountsByMatch.value[matchId] ?? 0;
+  return `${count} ${count === 1 ? 'bet' : 'bets'}`;
+}
+
 function formatKickoff(value: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -408,6 +422,7 @@ function errorText(err: unknown) {
         <div class="match-grid">
           <button v-for="match in currentMatches" :key="match.matchId" type="button" class="match-card match-card-button flag-gradient-card" :style="flagBackgroundStyle(match.homeTeam, match.awayTeam)" @click="openBet(match)">
             <div class="match-card-header">
+              <strong class="bet-count-pill">{{ betCountText(match.matchId) }}</strong>
               <div class="match-card-time">
                 <span>{{ match.groupName || match.stage || match.competition }}</span>
                 <time>{{ formatKickoff(match.kickoffAt) }}</time>
