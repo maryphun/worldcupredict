@@ -384,8 +384,12 @@ function errorText(err: unknown) {
             <h2>Coin leaderboard</h2>
           </div>
           <ol class="leaderboard">
-            <li v-for="entry in data.leaderboard" :key="entry.userId">
-              <span>{{ entry.displayName }}</span>
+            <li v-for="(entry, index) in data.leaderboard" :key="entry.userId">
+              <strong class="leaderboard-rank">{{ index + 1 }}</strong>
+              <span class="leaderboard-player">
+                <span>{{ entry.displayName }}</span>
+                <small>{{ entry.wins ?? 0 }}W / {{ entry.losses ?? 0 }}L</small>
+              </span>
               <strong>{{ entry.total }} coins</strong>
             </li>
           </ol>

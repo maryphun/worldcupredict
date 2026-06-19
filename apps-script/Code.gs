@@ -203,9 +203,9 @@ function snapshot_(token) {
   var user = token ? authOptional_(token) : null;
   var matchRows = table_(SHEETS.matches).rows;
   var matches = matchRows.map(publicMatch_);
-  var predictions = user ? table_(SHEETS.predictions).rows.filter(function(p) { return p.userId === user.userId; }) : [];
   var users = table_(SHEETS.users).rows;
-  var allPredictions = table_(SHEETS.predictions).rows;
+  var allPredictions = latestPredictions_(table_(SHEETS.predictions).rows);
+  var predictions = user ? allPredictions.filter(function(p) { return p.userId === user.userId; }) : [];
   return {
     user: user ? publicUser_(user, matchRows, allPredictions) : null,
     matches: matches,
@@ -664,18 +664,42 @@ function replaceRows_(name, rows) {
 function leaderboard_() {
   var users = table_(SHEETS.users).rows.filter(function(u) { return u.status === 'approved'; });
   var matches = table_(SHEETS.matches).rows;
-  var predictions = table_(SHEETS.predictions).rows;
+  var predictions = latestPredictions_(table_(SHEETS.predictions).rows);
   return users.map(function(user) {
-    var total = tokenBalance_(user, matches, predictions);
-    return { userId: user.userId, displayName: user.displayName, total: total };
+    var stats = leaderboardStats_(user, matches, predictions);
+    return { userId: user.userId, displayName: user.displayName, total: stats.total, wins: stats.wins, losses: stats.losses };
   }).sort(function(a, b) {
-    return b.total - a.total || a.displayName.localeCompare(b.displayName);
+    return b.total - a.total || b.wins - a.wins || a.losses - b.losses || a.displayName.localeCompare(b.displayName);
   });
+}
+
+function leaderboardStats_(user, matches, predictions) {
+  var stats = {
+    total: startingTokens_(user),
+    wins: 0,
+    losses: 0,
+  };
+
+  predictions.filter(function(prediction) {
+    return prediction.userId === user.userId;
+  }).forEach(function(prediction) {
+    var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
+    var status = predictionStatus_(prediction, match);
+    if (status === 'pending') return;
+
+    stats.total -= Number(prediction.tokenAmount || 0);
+    stats.total += payoutForPrediction_(prediction, match);
+    if (status === 'won') stats.wins += 1;
+    if (status === 'lost') stats.losses += 1;
+  });
+
+  stats.total = Math.max(0, Math.floor(stats.total));
+  return stats;
 }
 
 function betHistory_(viewer, matches, predictions, users) {
   var now = Date.now();
-  return predictions.map(function(prediction) {
+  return latestPredictions_(predictions).map(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
     var owner = find_(users, function(u) { return u.userId === prediction.userId; });
     if (!match || !owner) return null;
@@ -725,7 +749,7 @@ function predictionStatus_(prediction, match) {
 
 function tokenBalance_(user, matches, predictions) {
   var balance = startingTokens_(user);
-  predictions.filter(function(prediction) {
+  latestPredictions_(predictions).filter(function(prediction) {
     return prediction.userId === user.userId;
   }).forEach(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
@@ -750,6 +774,19 @@ function startingTokens_(user) {
   var tokens = Number(user.startingTokens);
   if (Number.isFinite(tokens) && tokens > 0) return tokens;
   return user.status === 'approved' ? STARTING_TOKENS : 0;
+}
+
+function latestPredictions_(predictions) {
+  var byUserMatch = {};
+  predictions.forEach(function(prediction) {
+    var key = prediction.userId + '::' + prediction.matchId;
+    if (!byUserMatch[key] || new Date(prediction.updatedAt).getTime() >= new Date(byUserMatch[key].updatedAt).getTime()) {
+      byUserMatch[key] = prediction;
+    }
+  });
+  return Object.keys(byUserMatch).map(function(key) {
+    return byUserMatch[key];
+  });
 }
 
 function ensureStartingTokens_(users, index) {
