@@ -121,10 +121,11 @@ const COUNTRY_COLORS: Record<string, string> = {
 };
 
 const FALLBACK_COLORS = ['#0b4db6', '#0a8f7a', '#8a1538', '#aa151b', '#0038a8', '#006847'];
+const BASE_URL = import.meta.env.BASE_URL || '/';
 
 export function teamFlagUrl(teamName: string) {
   const fileName = FLAG_FILES[teamName];
-  return fileName ? `/flags/${encodeURIComponent(fileName)}` : '';
+  return fileName ? publicAssetUrl(`flags/${encodeURIComponent(fileName)}`) : '';
 }
 
 export function teamColor(teamName: string) {
@@ -155,4 +156,9 @@ function hexToRgba(hex: string, alpha: number) {
   const g = Number.parseInt(value.slice(2, 4), 16);
   const b = Number.parseInt(value.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function publicAssetUrl(path: string) {
+  const base = BASE_URL.endsWith('/') ? BASE_URL : `${BASE_URL}/`;
+  return `${base}${path.replace(/^\/+/, '')}`;
 }
