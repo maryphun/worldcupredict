@@ -26,18 +26,21 @@ select {
 
 button {
   min-height: 3rem;
-  border: 0;
+  border: 2px solid rgba(11, 77, 182, 0.48);
   border-radius: 18px;
   padding: 0 1.15rem;
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #08275c);
-  box-shadow: 0 14px 28px rgba(10, 61, 145, 0.22);
+  box-shadow: 0 14px 28px rgba(10, 61, 145, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
-button:hover {
+button:hover,
+button:focus-visible {
+  border-color: rgba(47, 111, 228, 0.82);
+  box-shadow: 0 18px 34px rgba(10, 61, 145, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.34);
   transform: translateY(-1px);
 }
 
@@ -48,8 +51,18 @@ button:active {
 button.secondary,
 button.ghost-button {
   color: #0b234a;
-  background: #e8f0ff;
-  box-shadow: none;
+  border-color: rgba(91, 111, 145, 0.34);
+  background: linear-gradient(180deg, #f7fbff, #e8f0ff);
+  box-shadow: 0 10px 22px rgba(7, 22, 47, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+button.secondary:hover,
+button.secondary:focus-visible,
+button.ghost-button:hover,
+button.ghost-button:focus-visible {
+  border-color: rgba(47, 111, 228, 0.62);
+  background: linear-gradient(180deg, #ffffff, #dce8ff);
+  box-shadow: 0 14px 30px rgba(7, 22, 47, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 button:disabled {
@@ -197,11 +210,13 @@ h2 {
   overflow: hidden;
   min-height: 0;
   width: 100%;
+  border-color: rgba(47, 111, 228, 0.34);
   color: #07162f;
   text-align: left;
   background:
     linear-gradient(105deg, var(--home-color-soft, rgba(47, 111, 228, 0.16)) 0%, rgba(255, 255, 255, 0.98) 42%, rgba(255, 255, 255, 0.98) 58%, var(--away-color-soft, rgba(6, 23, 51, 0.16)) 100%),
     #ffffff;
+  box-shadow: 0 18px 45px rgba(7, 22, 47, 0.09), 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
 }
 
 .flag-gradient-card {
@@ -363,11 +378,11 @@ h2 {
   min-height: 118px;
   align-content: center;
   gap: 10px;
-  border: 1px solid #c8d6ef;
+  border: 2px solid #b9ccef;
   border-radius: 22px;
   color: #07162f;
-  background: #f3f7ff;
-  box-shadow: none;
+  background: linear-gradient(180deg, #f9fbff, #edf4ff);
+  box-shadow: 0 12px 24px rgba(7, 22, 47, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.82);
   text-align: center;
 }
 
@@ -381,6 +396,7 @@ h2 {
 }
 
 .pick-card.active {
+  border-color: rgba(47, 111, 228, 0.78);
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #061733);
   box-shadow: 0 16px 34px rgba(10, 61, 145, 0.24);
@@ -478,11 +494,13 @@ h2 {
 
 .tabs button {
   color: #0b234a;
-  background: #e8f0ff;
-  box-shadow: none;
+  border-color: rgba(91, 111, 145, 0.28);
+  background: linear-gradient(180deg, #f7fbff, #e8f0ff);
+  box-shadow: 0 10px 20px rgba(7, 22, 47, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .tabs button.active {
+  border-color: rgba(47, 111, 228, 0.78);
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #08275c);
 }
@@ -509,8 +527,12 @@ label {
 .view-card {
   display: grid;
   min-height: 156px;
+  border-width: 2px;
+  border-color: rgba(47, 111, 228, 0.26);
   padding: 20px;
   color: #07162f;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 247, 255, 0.96));
+  box-shadow: 0 16px 34px rgba(7, 22, 47, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.86);
   text-align: left;
 }
 
@@ -533,8 +555,10 @@ label {
 }
 
 .view-card.active {
+  border-color: rgba(47, 111, 228, 0.84);
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #061733);
+  box-shadow: 0 18px 38px rgba(10, 61, 145, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .view-card.active strong,
