@@ -37,11 +37,15 @@ button {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
-button:hover,
-button:focus-visible {
+button:hover {
   border-color: rgba(47, 111, 228, 0.82);
   box-shadow: 0 18px 34px rgba(10, 61, 145, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.34);
   transform: translateY(-1px);
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(47, 111, 228, 0.28);
+  outline-offset: 3px;
 }
 
 button:active {
@@ -57,9 +61,7 @@ button.ghost-button {
 }
 
 button.secondary:hover,
-button.secondary:focus-visible,
-button.ghost-button:hover,
-button.ghost-button:focus-visible {
+button.ghost-button:hover {
   border-color: rgba(47, 111, 228, 0.62);
   background: linear-gradient(180deg, #ffffff, #dce8ff);
   box-shadow: 0 14px 30px rgba(7, 22, 47, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -106,6 +108,35 @@ select {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 32px 0 56px;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+}
+
+.auth-shell .topbar,
+.auth-shell .connection-status,
+.auth-shell .loading-bar,
+.auth-shell .notice,
+.auth-shell .auth-card {
+  width: min(460px, 100%);
+  justify-self: center;
+}
+
+.auth-shell .topbar {
+  display: grid;
+  justify-content: stretch;
+  text-align: center;
+}
+
+.auth-shell h1 {
+  font-size: clamp(2.15rem, 8vw, 3.8rem);
+}
+
+.auth-shell .connection-status {
+  text-align: center;
 }
 
 .topbar,
@@ -552,9 +583,10 @@ h2 {
 }
 
 .tabs button.active {
-  border-color: rgba(47, 111, 228, 0.78);
+  border-color: #0b4db6;
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #08275c);
+  box-shadow: 0 14px 28px rgba(10, 61, 145, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .auth-form {
@@ -607,7 +639,7 @@ label {
 }
 
 .view-card.active {
-  border-color: rgba(47, 111, 228, 0.84);
+  border-color: #0b4db6;
   color: #ffffff;
   background: linear-gradient(135deg, #0b4db6, #061733);
   box-shadow: 0 18px 38px rgba(10, 61, 145, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
@@ -1070,6 +1102,11 @@ small {
     padding: 18px 0 32px;
   }
 
+  .auth-shell {
+    min-height: 100vh;
+    padding: 18px 0 32px;
+  }
+
   .topbar {
     position: sticky;
     top: 0;
@@ -1081,6 +1118,16 @@ small {
     padding: 14px;
     background: rgba(238, 244, 255, 0.86);
     backdrop-filter: blur(18px);
+  }
+
+  .auth-shell .topbar {
+    position: static;
+    justify-items: center;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   h1 {

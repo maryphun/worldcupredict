@@ -312,7 +312,7 @@ function errorText(err: unknown) {
 </script>
 
 <template>
-  <main class="shell" :class="{ 'is-busy': loading }" :aria-busy="loading">
+  <main class="shell" :class="{ 'is-busy': loading, 'auth-shell': !user }" :aria-busy="loading">
     <header class="topbar">
       <div>
         <p class="eyebrow">Private pool</p>
