@@ -71,6 +71,27 @@ button:disabled {
   transform: none;
 }
 
+button.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+button.is-loading::after {
+  width: 0.95em;
+  height: 0.95em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  content: '';
+  animation: spin 720ms linear infinite;
+}
+
+button.is-loading:disabled {
+  opacity: 0.86;
+}
+
 input,
 select {
   min-height: 3rem;
@@ -182,6 +203,26 @@ h2 {
   margin: 0 0 18px;
   color: #4c6388;
   font-size: 0.92rem;
+}
+
+.loading-bar {
+  overflow: hidden;
+  height: 6px;
+  border: 1px solid rgba(47, 111, 228, 0.18);
+  border-radius: 999px;
+  margin: -6px 0 16px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 1px 2px rgba(7, 22, 47, 0.08);
+}
+
+.loading-bar span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f6fe4, #0b4db6, #061733);
+  box-shadow: 0 0 18px rgba(47, 111, 228, 0.42);
+  animation: loading-slide 980ms ease-in-out infinite;
 }
 
 .auth-card,
@@ -915,6 +956,24 @@ small {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loading-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(95%);
+  }
+  100% {
+    transform: translateX(245%);
   }
 }
 

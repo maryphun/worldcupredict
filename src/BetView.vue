@@ -162,7 +162,7 @@ function formatOdds(value: number | string | '') {
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
-        <button type="submit" class="secondary" :disabled="loading">Update score</button>
+        <button type="submit" class="secondary" :class="{ 'is-loading': loading }" :disabled="loading">Update score</button>
       </form>
     </div>
 
@@ -219,7 +219,7 @@ function formatOdds(value: number | string | '') {
           <button type="button" @click="pressDigit('0')">0</button>
           <button type="button" class="secondary" @click="backspace">Delete</button>
         </div>
-        <button type="button" class="confirm-bet" :disabled="tokenAmount < 1 || isOverBalance || loading" @click="confirmBet">Confirm bet</button>
+        <button type="button" class="confirm-bet" :class="{ 'is-loading': loading }" :disabled="tokenAmount < 1 || isOverBalance || loading" @click="confirmBet">Confirm bet</button>
       </div>
     </div>
   </section>

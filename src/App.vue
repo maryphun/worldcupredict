@@ -9,6 +9,7 @@ type ViewKey = 'matches' | 'previous' | 'history';
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
 const loading = ref(false);
+const loadingAction = ref('');
 const message = ref('');
 const connection = ref(apiBaseConfigured ? 'Checking backend...' : 'Set VITE_API_BASE to your Apps Script Web App URL.');
 const data = ref<Snapshot>(emptySnapshot);
@@ -62,25 +63,26 @@ async function checkBackend() {
   }
 }
 
-async function load() {
+async function load(action = 'refresh') {
   if (!apiBaseConfigured) return;
   loading.value = true;
+  loadingAction.value = action;
   message.value = '';
   try {
-    data.value = await snapshot(token.value);
-    if (!data.value.betHistory) data.value.betHistory = [];
-    seedDrafts();
+    applySnapshot(await snapshot(token.value));
   } catch (err) {
     message.value = errorText(err);
     token.value = '';
     localStorage.removeItem('wc-token');
   } finally {
     loading.value = false;
+    loadingAction.value = '';
   }
 }
 
 async function submitAuth() {
   loading.value = true;
+  loadingAction.value = 'auth';
   message.value = '';
   try {
     if (authMode.value === 'register') {
@@ -92,11 +94,12 @@ async function submitAuth() {
     const result = await callApi<{ token: string }>({ action: 'login', username: auth.username, password: auth.password });
     token.value = result.token;
     localStorage.setItem('wc-token', result.token);
-    await load();
+    applySnapshot(await snapshot(token.value));
   } catch (err) {
     message.value = errorText(err);
   } finally {
     loading.value = false;
+    loadingAction.value = '';
   }
 }
 
@@ -106,7 +109,7 @@ async function savePrediction(match: Match) {
     token: token.value,
     matchId: match.matchId,
     ...draftPredictions[match.matchId],
-  });
+  }, 'bet');
 }
 
 async function reportScore(match: Match) {
@@ -115,37 +118,36 @@ async function reportScore(match: Match) {
     token: token.value,
     matchId: match.matchId,
     ...draftScores[match.matchId],
-  });
+  }, 'score');
 }
 
 async function approve(pendingUser: User, approved: boolean) {
-  await mutate({ action: 'approveUser', token: token.value, userId: pendingUser.userId, approved });
+  await mutate({ action: 'approveUser', token: token.value, userId: pendingUser.userId, approved }, approved ? 'approve' : 'reject');
 }
 
 async function refreshFifa() {
   loading.value = true;
+  loadingAction.value = 'fifa';
   message.value = '';
   try {
     const result = await callApi<{ refreshed?: number; removedDuplicates?: number }>({ action: 'syncFifa', token: token.value });
-    data.value = await snapshot(token.value);
-    if (!data.value.betHistory) data.value.betHistory = [];
-    seedDrafts();
+    applySnapshot(await snapshot(token.value));
     message.value = `FIFA refreshed: ${result.refreshed ?? 0} matches, ${result.removedDuplicates ?? 0} duplicates removed.`;
   } catch (err) {
     message.value = errorText(err);
   } finally {
     loading.value = false;
+    loadingAction.value = '';
   }
 }
 
 async function refreshOdds() {
   loading.value = true;
+  loadingAction.value = 'odds';
   message.value = '';
   try {
     const result = await callApi<{ updated?: number; events?: number; missingOdds?: number; unmatched?: string[]; requestsRemaining?: string; requestsLast?: string }>({ action: 'refreshOdds', token: token.value });
-    data.value = await snapshot(token.value);
-    if (!data.value.betHistory) data.value.betHistory = [];
-    seedDrafts();
+    applySnapshot(await snapshot(token.value));
     const unmatchedText = result.unmatched?.length ? ` Unmatched: ${result.unmatched.join(', ')}.` : '';
     const costText = result.requestsLast ? ` Cost: ${result.requestsLast} credit${result.requestsLast === '1' ? '' : 's'}.` : '';
     const remainingText = result.requestsRemaining ? ` Requests left: ${result.requestsRemaining}.` : '';
@@ -154,20 +156,37 @@ async function refreshOdds() {
     message.value = errorText(err);
   } finally {
     loading.value = false;
+    loadingAction.value = '';
   }
 }
 
-async function mutate(payload: Record<string, unknown>) {
+async function refreshAccessRequests() {
   loading.value = true;
+  loadingAction.value = 'requests';
   message.value = '';
   try {
-    data.value = await callApi<Snapshot>(payload);
-    if (!data.value.betHistory) data.value.betHistory = [];
-    seedDrafts();
+    applySnapshot(await snapshot(token.value));
+    const count = data.value.pendingUsers.length;
+    message.value = `Access requests refreshed: ${count} waiting.`;
   } catch (err) {
     message.value = errorText(err);
   } finally {
     loading.value = false;
+    loadingAction.value = '';
+  }
+}
+
+async function mutate(payload: Record<string, unknown>, action = 'save') {
+  loading.value = true;
+  loadingAction.value = action;
+  message.value = '';
+  try {
+    applySnapshot(await callApi<Snapshot>(payload));
+  } catch (err) {
+    message.value = errorText(err);
+  } finally {
+    loading.value = false;
+    loadingAction.value = '';
   }
 }
 
@@ -191,6 +210,16 @@ function seedDrafts() {
       status: match.status || 'live',
     };
   });
+}
+
+function applySnapshot(nextSnapshot: Snapshot) {
+  data.value = nextSnapshot;
+  if (!data.value.betHistory) data.value.betHistory = [];
+  seedDrafts();
+}
+
+function isLoadingAction(action: string) {
+  return loading.value && loadingAction.value === action;
 }
 
 function locked(match: Match) {
@@ -269,7 +298,7 @@ function errorText(err: unknown) {
 </script>
 
 <template>
-  <main class="shell">
+  <main class="shell" :class="{ 'is-busy': loading }" :aria-busy="loading">
     <header class="topbar">
       <div>
         <p class="eyebrow">Private pool</p>
@@ -286,12 +315,13 @@ function errorText(err: unknown) {
     </header>
 
     <p class="connection-status">{{ connection }}</p>
+    <div v-if="loading" class="loading-bar" aria-hidden="true"><span></span></div>
     <p v-if="message" class="notice">{{ message }}</p>
 
     <section v-if="!user" class="auth-card">
       <div class="tabs">
-        <button :class="{ active: authMode === 'login' }" type="button" @click="authMode = 'login'">Log in</button>
-        <button :class="{ active: authMode === 'register' }" type="button" @click="authMode = 'register'">Request access</button>
+        <button :class="{ active: authMode === 'login' }" type="button" :disabled="loading" @click="authMode = 'login'">Log in</button>
+        <button :class="{ active: authMode === 'register' }" type="button" :disabled="loading" @click="authMode = 'register'">Request access</button>
       </div>
       <form class="auth-form" @submit.prevent="submitAuth">
         <label>
@@ -306,7 +336,7 @@ function errorText(err: unknown) {
           Password
           <input v-model="auth.password" autocomplete="current-password" type="password" required />
         </label>
-        <button type="submit" :disabled="loading">{{ authMode === 'login' ? 'Log in' : 'Send request' }}</button>
+        <button type="submit" :class="{ 'is-loading': isLoadingAction('auth') }" :disabled="loading">{{ authMode === 'login' ? 'Log in' : 'Send request' }}</button>
       </form>
     </section>
 
@@ -351,16 +381,17 @@ function errorText(err: unknown) {
           <div class="section-head">
             <h2>Admin</h2>
             <div class="admin-actions">
-              <button type="button" class="small-button" @click="refreshFifa">Refresh FIFA</button>
-              <button type="button" class="small-button secondary" @click="refreshOdds">Refresh odds</button>
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('requests') }" :disabled="loading" @click="refreshAccessRequests">Refresh requests</button>
+              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('fifa') }" :disabled="loading" @click="refreshFifa">Refresh FIFA</button>
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('odds') }" :disabled="loading" @click="refreshOdds">Refresh odds</button>
             </div>
           </div>
           <p v-if="!data.pendingUsers.length" class="muted">No pending users.</p>
           <div v-for="pendingUser in data.pendingUsers" :key="pendingUser.userId" class="approval">
             <span>{{ pendingUser.displayName }} <small>@{{ pendingUser.username }}</small></span>
             <div>
-              <button type="button" class="small-button" @click="approve(pendingUser, true)">Approve</button>
-              <button type="button" class="small-button secondary" @click="approve(pendingUser, false)">Reject</button>
+              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('approve') }" :disabled="loading" @click="approve(pendingUser, true)">Approve</button>
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('reject') }" :disabled="loading" @click="approve(pendingUser, false)">Reject</button>
             </div>
           </div>
         </div>
@@ -369,7 +400,7 @@ function errorText(err: unknown) {
       <section v-if="activeView !== 'history'" class="content-section">
         <div class="section-head">
           <h2>{{ viewCards.find((card) => card.key === activeView)?.label }}</h2>
-          <button type="button" class="small-button secondary" @click="load">Refresh</button>
+          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
         </div>
 
         <p v-if="!currentMatches.length" class="empty-state">Nothing here right now.</p>
@@ -404,7 +435,7 @@ function errorText(err: unknown) {
       <section v-else class="content-section">
         <div class="section-head">
           <h2>Bet history</h2>
-          <button type="button" class="small-button secondary" @click="load">Refresh</button>
+          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
         </div>
 
         <p v-if="!visibleBetHistory.length" class="empty-state">No bets in the three-day window yet.</p>
