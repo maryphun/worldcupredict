@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env.local
+*.log
+.npm-cache/
+.codex/
+.agents/
+work/
+outputs/
