@@ -2265,11 +2265,40 @@ small {
 
   .leaderboard li,
   .non-admin-utility .leaderboard li {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 1.85rem minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 56px;
+    border-radius: 14px;
+    padding: 8px 10px;
+  }
+
+  .leaderboard-rank {
+    width: 1.72rem;
+    height: 1.72rem;
+    font-size: 0.78rem;
+  }
+
+  .leaderboard-player {
+    gap: 2px;
+  }
+
+  .leaderboard-player > span {
+    overflow-wrap: normal;
+    white-space: nowrap;
+    font-size: 0.94rem;
+    line-height: 1.05;
   }
 
   .leaderboard-player small {
-    gap: 7px;
+    gap: 5px;
+    font-size: 0.7rem;
+    line-height: 1.1;
+  }
+
+  .active-bet-chip {
+    min-height: 1.08rem;
+    padding: 0 0.38rem;
+    font-size: 0.66rem;
   }
 
   .leaderboard,
@@ -2280,7 +2309,14 @@ small {
   }
 
   .leaderboard li > strong:last-child {
-    grid-column: 2;
+    grid-column: 3;
+    justify-self: end;
+    align-self: end;
+    margin-bottom: 1px;
+    font-size: 0.82rem;
+    line-height: 1.1;
+    text-align: right;
+    white-space: nowrap;
   }
 
   .numpad button {
