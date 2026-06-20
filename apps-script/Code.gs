@@ -667,7 +667,16 @@ function leaderboard_() {
   var predictions = latestPredictions_(table_(SHEETS.predictions).rows);
   return users.map(function(user) {
     var stats = leaderboardStats_(user, matches, predictions);
-    return { userId: user.userId, displayName: user.displayName, total: stats.total, wins: stats.wins, losses: stats.losses };
+    return {
+      userId: user.userId,
+      displayName: user.displayName,
+      total: stats.total,
+      settledCoins: stats.total,
+      availableCoins: tokenBalance_(user, matches, predictions),
+      waitingCoins: stats.waitingCoins,
+      wins: stats.wins,
+      losses: stats.losses,
+    };
   }).sort(function(a, b) {
     return b.total - a.total || b.wins - a.wins || a.losses - b.losses || a.displayName.localeCompare(b.displayName);
   });
@@ -676,6 +685,7 @@ function leaderboard_() {
 function leaderboardStats_(user, matches, predictions) {
   var stats = {
     total: startingTokens_(user),
+    waitingCoins: 0,
     wins: 0,
     losses: 0,
   };
@@ -685,7 +695,10 @@ function leaderboardStats_(user, matches, predictions) {
   }).forEach(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
     var status = predictionStatus_(prediction, match);
-    if (status === 'pending') return;
+    if (status === 'pending') {
+      stats.waitingCoins += Number(prediction.tokenAmount || 0);
+      return;
+    }
 
     stats.total -= Number(prediction.tokenAmount || 0);
     stats.total += payoutForPrediction_(prediction, match);

@@ -67,7 +67,16 @@ export type Snapshot = {
   user: User | null;
   matches: Match[];
   predictions: Prediction[];
-  leaderboard: Array<{ userId: string; displayName: string; total: number; wins: number; losses: number }>;
+  leaderboard: Array<{
+    userId: string;
+    displayName: string;
+    total: number;
+    settledCoins?: number;
+    availableCoins?: number;
+    waitingCoins?: number;
+    wins?: number;
+    losses?: number;
+  }>;
   pendingUsers: User[];
   betHistory: BetHistoryEntry[];
 };

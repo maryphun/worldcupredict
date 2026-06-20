@@ -41,6 +41,21 @@ const betCountsByMatch = computed(() => {
 
   return Object.fromEntries(Object.entries(bettorsByMatch).map(([matchId, bettors]) => [matchId, bettors.size]));
 });
+const waitingCoinsByUser = computed(() => {
+  return betHistory.value.reduce<Record<string, number>>((map, entry) => {
+    if (entry.resultStatus !== 'pending') return map;
+    map[entry.userId] = (map[entry.userId] ?? 0) + Number(entry.tokenAmount || 0);
+    return map;
+  }, {});
+});
+const displayLeaderboard = computed(() => {
+  return data.value.leaderboard
+    .map((entry) => ({
+      ...entry,
+      displayTotal: leaderboardCoins(entry),
+    }))
+    .sort((a, b) => b.displayTotal - a.displayTotal || (b.wins ?? 0) - (a.wins ?? 0) || (a.losses ?? 0) - (b.losses ?? 0) || a.displayName.localeCompare(b.displayName));
+});
 const currentMatches = computed(() => {
   if (activeView.value === 'matches') return mainMatches.value;
   if (activeView.value === 'previous') return previousMatches.value;
@@ -302,6 +317,12 @@ function betCountText(matchId: string) {
   return `${count} ${count === 1 ? 'bet' : 'bets'}`;
 }
 
+function leaderboardCoins(entry: Snapshot['leaderboard'][number]) {
+  const settled = Number(entry.settledCoins);
+  if (Number.isFinite(settled)) return Math.max(0, Math.floor(settled));
+  return Math.max(0, Math.floor(Number(entry.total || 0) + (waitingCoinsByUser.value[entry.userId] ?? 0)));
+}
+
 function formatKickoff(value: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -392,17 +413,17 @@ function errorText(err: unknown) {
           <div class="section-head">
             <div>
               <h2>Coin leaderboard</h2>
-              <p class="leaderboard-prize">第一名可以收穫一個「算你厲害」</p>
+              <p class="leaderboard-prize">&#31532;&#19968;&#21517;&#21487;&#20197;&#25910;&#29554;&#19968;&#20491;&#12300;&#31639;&#20320;&#21426;&#23475;&#12301;</p>
             </div>
           </div>
           <ol class="leaderboard">
-            <li v-for="(entry, index) in data.leaderboard" :key="entry.userId">
+            <li v-for="(entry, index) in displayLeaderboard" :key="entry.userId">
               <strong class="leaderboard-rank">{{ index + 1 }}</strong>
               <span class="leaderboard-player">
                 <span>{{ entry.displayName }}</span>
                 <small>{{ entry.wins ?? 0 }}W / {{ entry.losses ?? 0 }}L</small>
               </span>
-              <strong>{{ entry.total }} coins</strong>
+              <strong>{{ entry.displayTotal }} coins</strong>
             </li>
           </ol>
         </div>
