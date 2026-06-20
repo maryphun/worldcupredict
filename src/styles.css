@@ -12,12 +12,16 @@
 html {
   width: 100%;
   max-width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
   overflow-x: hidden;
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -25,6 +29,7 @@ html {
 *::before,
 *::after {
   min-width: 0;
+  max-inline-size: 100%;
 }
 
 body {
@@ -32,7 +37,11 @@ body {
   min-height: 100vh;
   width: 100%;
   max-width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  position: relative;
   overflow-x: hidden;
+  touch-action: pan-y;
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
 }
@@ -40,7 +49,10 @@ body {
 #app {
   width: 100%;
   max-width: 100%;
-  overflow-x: clip;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,
@@ -132,11 +144,11 @@ select {
 }
 
 .shell {
-  width: min(1180px, calc(100% - 32px));
-  max-width: calc(100vw - 32px);
+  width: 100%;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 32px 0 56px;
-  overflow-x: clip;
+  padding: 32px 16px 56px;
+  overflow-x: hidden;
 }
 
 .auth-shell {
@@ -300,6 +312,8 @@ h3 {
 .bet-score,
 .bet-slip,
 .score-slip {
+  width: 100%;
+  max-width: 100%;
   border: 1px solid rgba(119, 148, 194, 0.28);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.93);
@@ -530,7 +544,8 @@ h3 {
   z-index: 20;
   display: grid;
   place-items: center;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
@@ -542,7 +557,8 @@ h3 {
 .token-modal {
   display: grid;
   gap: 14px;
-  width: min(420px, calc(100vw - 24px));
+  width: min(420px, 100%);
+  max-width: 100%;
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1111,7 +1127,8 @@ small {
   z-index: 30;
   display: grid;
   place-items: center;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
@@ -1123,7 +1140,8 @@ small {
 .profile-modal {
   display: grid;
   gap: 16px;
-  width: min(980px, calc(100vw - 24px));
+  width: min(980px, 100%);
+  max-width: 100%;
   max-height: calc(100dvh - 24px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -1321,15 +1339,55 @@ small {
 }
 
 @media (max-width: 700px) {
+  html,
+  body,
+  #app {
+    width: 100%;
+    max-width: 100%;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    overflow-x: hidden;
+  }
+
   .shell {
-    width: calc(100% - 16px);
-    max-width: calc(100vw - 16px);
-    padding: 12px 0 24px;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 8px 24px;
+  }
+
+  .shell > *,
+  .topbar,
+  .connection-status,
+  .loading-bar,
+  .notice,
+  .auth-card,
+  .account,
+  .utility-grid,
+  .overview-grid,
+  .match-grid,
+  .history-grid,
+  .section-head,
+  .bet-page,
+  .bet-layout,
+  .bet-wallet,
+  .bet-slip,
+  .score-slip,
+  .match-card,
+  .history-card,
+  .match-card-button,
+  .view-card,
+  .leaderboard,
+  .profile-summary,
+  .profile-columns,
+  .profile-list,
+  .transfer-form {
+    width: 100%;
+    max-width: 100%;
   }
 
   .auth-shell {
     min-height: 100vh;
-    padding: 18px 0 32px;
+    padding: 18px 8px 32px;
   }
 
   .topbar {
@@ -1357,6 +1415,9 @@ small {
 
   h1 {
     font-size: clamp(2rem, 13vw, 3.2rem);
+    max-width: 100%;
+    line-height: 0.98;
+    overflow-wrap: anywhere;
   }
 
   .account {
@@ -1368,6 +1429,14 @@ small {
     width: 100%;
   }
 
+  .bet-wallet {
+    grid-template-columns: 1fr;
+  }
+
+  .bet-wallet strong {
+    justify-self: start;
+  }
+
   .utility-grid,
   .match-grid,
   .history-grid,
@@ -1376,6 +1445,7 @@ small {
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
+    max-width: 100%;
   }
 
   .auth-card,
@@ -1401,11 +1471,13 @@ small {
 
   .teams {
     grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
     text-align: left;
   }
 
   .teams.teams-upcoming {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .teams strong:last-child {
@@ -1436,6 +1508,22 @@ small {
   .profile-list strong,
   .profile-list span {
     overflow-wrap: anywhere;
+  }
+
+  .teams strong,
+  .bet-score strong {
+    flex: 1 1 0;
+    white-space: normal;
+  }
+
+  .match-card-header,
+  .odds-row,
+  .history-stats,
+  .leaderboard li,
+  .approval,
+  .profile-list article {
+    width: 100%;
+    max-width: 100%;
   }
 
   .match-card-header {
@@ -1481,7 +1569,8 @@ small {
   }
 
   .profile-modal {
-    width: calc(100vw - 16px);
+    width: 100%;
+    max-width: 100%;
     max-height: calc(100dvh - 16px);
     border-radius: 24px;
     padding: 14px;
@@ -1493,7 +1582,8 @@ small {
   }
 
   .token-modal {
-    width: calc(100vw - 16px);
+    width: 100%;
+    max-width: 100%;
     max-height: calc(100dvh - 16px);
     border-radius: 24px;
     padding: 14px;
@@ -1537,6 +1627,10 @@ small {
   .leaderboard li,
   .non-admin-utility .leaderboard li {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .non-admin-utility .leaderboard {
+    grid-template-columns: 1fr;
   }
 
   .leaderboard li > strong:last-child {
