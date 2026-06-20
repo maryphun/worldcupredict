@@ -6,6 +6,7 @@ import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
 const MATCH_WINDOW_HOURS = 24;
+const PREVIOUS_MATCH_LIMIT = 20;
 
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
@@ -24,7 +25,10 @@ const draftScores = reactive<Record<string, { homeScore: number; awayScore: numb
 
 const user = computed(() => data.value.user);
 const matches = computed(() => [...data.value.matches].sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()));
-const previousMatches = computed(() => matches.value.filter((match) => isWithinPreviousHours(match, MATCH_WINDOW_HOURS) && (match.status === 'final' || (locked(match) && match.status !== 'live'))));
+const previousMatches = computed(() => matches.value
+  .filter((match) => match.status === 'final' || (locked(match) && match.status !== 'live'))
+  .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
+  .slice(0, PREVIOUS_MATCH_LIMIT));
 const liveMatches = computed(() => matches.value.filter((match) => match.status === 'live' && isWithinAroundNow(match, MATCH_WINDOW_HOURS)));
 const upcomingMatches = computed(() => matches.value.filter((match) => isWithinNextHours(match, MATCH_WINDOW_HOURS) && !locked(match) && match.status === 'scheduled'));
 const mainMatches = computed(() => [...liveMatches.value, ...upcomingMatches.value]);
@@ -76,7 +80,7 @@ const currentMatches = computed(() => {
 });
 const viewCards = computed(() => [
   { key: 'matches' as const, label: 'Matches', count: mainMatches.value.length, detail: 'Live first, then the next 24 hours' },
-  { key: 'previous' as const, label: 'Previous matches', count: previousMatches.value.length, detail: 'Last 24 hours of scores and outcomes' },
+  { key: 'previous' as const, label: 'Previous matches', count: previousMatches.value.length, detail: 'Newest 20 results' },
   { key: 'history' as const, label: 'Bet history', count: visibleBetHistory.value.length, detail: 'Picks tied to the 24-hour match window' },
 ]);
 const predictionsByMatch = computed(() => {
@@ -268,12 +272,6 @@ function isWithinNextHours(match: Match, hours: number) {
   const kickoff = new Date(match.kickoffAt).getTime();
   const now = Date.now();
   return kickoff >= now && kickoff <= now + hours * 60 * 60 * 1000;
-}
-
-function isWithinPreviousHours(match: Match, hours: number) {
-  const kickoff = new Date(match.kickoffAt).getTime();
-  const now = Date.now();
-  return kickoff < now && kickoff >= now - hours * 60 * 60 * 1000;
 }
 
 function isWithinAroundNow(match: Match, hours: number) {
