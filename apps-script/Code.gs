@@ -133,6 +133,7 @@ function route_(action, body) {
   if (action === 'login') return login_(body);
   if (action === 'submitPrediction') return submitPrediction_(body);
   if (action === 'reportScore') return reportScore_(body);
+  if (action === 'transferCoins') return transferCoins_(body);
   if (action === 'approveUser') return approveUser_(body);
   if (action === 'syncFifa') {
     requireAdmin_(body.token);
@@ -205,15 +206,17 @@ function snapshot_(token) {
   var matchRows = table_(SHEETS.matches).rows;
   var matches = matchRows.map(publicMatch_);
   var users = table_(SHEETS.users).rows;
+  var auditRows = table_(SHEETS.audit).rows;
   var allPredictions = latestPredictions_(table_(SHEETS.predictions).rows);
   var predictions = user ? allPredictions.filter(function(p) { return p.userId === user.userId; }) : [];
   return {
-    user: user ? publicUser_(user, matchRows, allPredictions) : null,
+    user: user ? publicUser_(user, matchRows, allPredictions, auditRows) : null,
     matches: matches,
     predictions: predictions,
     leaderboard: leaderboard_(),
-    pendingUsers: user && user.role === 'admin' ? users.filter(function(u) { return u.status === 'pending'; }).map(function(u) { return publicUser_(u); }) : [],
+    pendingUsers: user && user.role === 'admin' ? users.filter(function(u) { return u.status === 'pending'; }).map(function(u) { return publicUser_(u, matchRows, allPredictions, auditRows); }) : [],
     betHistory: user ? betHistory_(user, matchRows, allPredictions, users) : [],
+    coinTransfers: user ? coinTransfers_(auditRows, users) : [],
   };
 }
 
@@ -268,6 +271,31 @@ function reportScore_(body) {
   if (matches.rows[index].status !== 'live') throw new Error('Score reports are only available for live matches.');
   matches.update(index, { homeScore: homeScore, awayScore: awayScore, status: cleanStatus_(body.status || 'live'), scoreSource: 'manual', lastSyncedAt: nowIso_(), manualUpdatedBy: user.userId });
   audit_(user.userId, 'reportScore', body.matchId, { homeScore: homeScore, awayScore: awayScore, status: body.status || 'live' });
+  return snapshot_(body.token);
+}
+
+function transferCoins_(body) {
+  var sender = requireUser_(body.token);
+  var toUserId = String(body.toUserId || '').trim();
+  if (!toUserId) throw new Error('Choose a user to transfer coins to.');
+  if (toUserId === sender.userId) throw new Error('You cannot transfer coins to yourself.');
+
+  var amount = parseTokenAmount_(body.amount);
+  var users = table_(SHEETS.users).rows;
+  var recipient = find_(users, function(u) { return u.userId === toUserId && u.status === 'approved'; });
+  if (!recipient) throw new Error('Recipient not found.');
+
+  var matches = table_(SHEETS.matches).rows;
+  var predictions = table_(SHEETS.predictions).rows;
+  var auditRows = table_(SHEETS.audit).rows;
+  var available = tokenBalance_(sender, matches, predictions, auditRows);
+  if (amount > available) throw new Error('Not enough coins to transfer.');
+
+  audit_(sender.userId, 'transferCoins', recipient.userId, {
+    amount: amount,
+    fromDisplayName: sender.displayName,
+    toDisplayName: recipient.displayName,
+  });
   return snapshot_(body.token);
 }
 
@@ -703,14 +731,15 @@ function leaderboard_() {
   var users = table_(SHEETS.users).rows.filter(function(u) { return u.status === 'approved'; });
   var matches = table_(SHEETS.matches).rows;
   var predictions = latestPredictions_(table_(SHEETS.predictions).rows);
+  var auditRows = table_(SHEETS.audit).rows;
   return users.map(function(user) {
-    var stats = leaderboardStats_(user, matches, predictions);
+    var stats = leaderboardStats_(user, matches, predictions, auditRows);
     return {
       userId: user.userId,
       displayName: user.displayName,
       total: stats.total,
       settledCoins: stats.total,
-      availableCoins: tokenBalance_(user, matches, predictions),
+      availableCoins: tokenBalance_(user, matches, predictions, auditRows),
       waitingCoins: stats.waitingCoins,
       wins: stats.wins,
       losses: stats.losses,
@@ -720,9 +749,9 @@ function leaderboard_() {
   });
 }
 
-function leaderboardStats_(user, matches, predictions) {
+function leaderboardStats_(user, matches, predictions, auditRows) {
   var stats = {
-    total: startingTokens_(user),
+    total: startingTokens_(user) + transferDelta_(user.userId, auditRows),
     waitingCoins: 0,
     wins: 0,
     losses: 0,
@@ -749,7 +778,6 @@ function leaderboardStats_(user, matches, predictions) {
 }
 
 function betHistory_(viewer, matches, predictions, users) {
-  var now = Date.now();
   return latestPredictions_(predictions).map(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
     var owner = find_(users, function(u) { return u.userId === prediction.userId; });
@@ -783,6 +811,29 @@ function betHistory_(viewer, matches, predictions, users) {
   });
 }
 
+function coinTransfers_(auditRows, users) {
+  return (auditRows || []).filter(function(row) {
+    return row.action === 'transferCoins';
+  }).map(function(row) {
+    var payload = parsePayload_(row.payload);
+    var sender = find_(users, function(u) { return u.userId === row.userId; });
+    var recipient = find_(users, function(u) { return u.userId === row.targetId; });
+    return {
+      transferId: row.auditId,
+      createdAt: row.createdAt,
+      fromUserId: row.userId,
+      fromDisplayName: sender ? sender.displayName : payload.fromDisplayName || 'Someone',
+      toUserId: row.targetId,
+      toDisplayName: recipient ? recipient.displayName : payload.toDisplayName || 'Someone',
+      amount: Number(payload.amount || 0),
+    };
+  }).filter(function(row) {
+    return row.amount > 0;
+  }).sort(function(a, b) {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
 function resultToken_(predictedResult, match) {
   if (predictedResult === 'home') return match.homeTeam;
   if (predictedResult === 'away') return match.awayTeam;
@@ -798,8 +849,8 @@ function predictionStatus_(prediction, match) {
   return prediction.predictedResult === resultFromScores_(Number(match.homeScore), Number(match.awayScore)) ? 'won' : 'lost';
 }
 
-function tokenBalance_(user, matches, predictions) {
-  var balance = startingTokens_(user);
+function tokenBalance_(user, matches, predictions, auditRows) {
+  var balance = startingTokens_(user) + transferDelta_(user.userId, auditRows);
   latestPredictions_(predictions).filter(function(prediction) {
     return prediction.userId === user.userId;
   }).forEach(function(prediction) {
@@ -819,6 +870,28 @@ function payoutForPrediction_(prediction, match) {
 function oddsMultiplier_(value) {
   var n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 2;
+}
+
+function transferDelta_(userId, auditRows) {
+  var rows = auditRows || table_(SHEETS.audit).rows;
+  return rows.reduce(function(total, row) {
+    if (row.action !== 'transferCoins') return total;
+    var amount = Number(parsePayload_(row.payload).amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return total;
+    if (row.userId === userId) total -= amount;
+    if (row.targetId === userId) total += amount;
+    return total;
+  }, 0);
+}
+
+function parsePayload_(payload) {
+  if (!payload) return {};
+  if (typeof payload === 'object') return payload;
+  try {
+    return JSON.parse(String(payload));
+  } catch (err) {
+    return {};
+  }
 }
 
 function startingTokens_(user) {
@@ -906,7 +979,7 @@ function authOptional_(token) {
   return ensureStartingTokens_(users, index);
 }
 
-function publicUser_(user, matches, predictions) {
+function publicUser_(user, matches, predictions, auditRows) {
   var startingTokens = startingTokens_(user);
   return {
     userId: user.userId,
@@ -915,7 +988,7 @@ function publicUser_(user, matches, predictions) {
     status: user.status,
     role: user.role,
     startingTokens: startingTokens,
-    tokenBalance: matches && predictions ? tokenBalance_(user, matches, predictions) : startingTokens,
+    tokenBalance: matches && predictions ? tokenBalance_(user, matches, predictions, auditRows) : startingTokens + transferDelta_(user.userId, auditRows),
   };
 }
 

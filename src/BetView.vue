@@ -19,6 +19,7 @@ const emit = defineEmits<{
   back: [];
   savePrediction: [predictedResult: Pick, tokenAmount: number];
   reportScore: [homeScore: number, awayScore: number, status: string];
+  openUser: [userId: string];
 }>();
 
 const score = reactive({ homeScore: 0, awayScore: 0, status: 'live' });
@@ -177,7 +178,17 @@ function formatOdds(value: number | string | '') {
     <p v-if="!sortedEntries.length" class="empty-state">No bets yet.</p>
 
     <div class="history-grid">
-      <article v-for="entry in sortedEntries" :key="entry.predictionId" class="history-card" :class="{ mine: entry.isMine }">
+      <article
+        v-for="entry in sortedEntries"
+        :key="entry.predictionId"
+        class="history-card profile-trigger"
+        :class="{ mine: entry.isMine }"
+        role="button"
+        tabindex="0"
+        @click="emit('openUser', entry.userId)"
+        @keydown.enter.prevent="emit('openUser', entry.userId)"
+        @keydown.space.prevent="emit('openUser', entry.userId)"
+      >
         <div class="history-top">
           <div class="history-person">
             <strong>{{ entry.displayName }}</strong>

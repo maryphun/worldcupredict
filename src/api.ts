@@ -63,6 +63,16 @@ export type BetHistoryEntry = {
   updatedAt: string;
 };
 
+export type CoinTransferEntry = {
+  transferId: string;
+  createdAt: string;
+  fromUserId: string;
+  fromDisplayName: string;
+  toUserId: string;
+  toDisplayName: string;
+  amount: number;
+};
+
 export type Snapshot = {
   user: User | null;
   matches: Match[];
@@ -79,6 +89,7 @@ export type Snapshot = {
   }>;
   pendingUsers: User[];
   betHistory: BetHistoryEntry[];
+  coinTransfers: CoinTransferEntry[];
 };
 
 export async function callApi<T>(payload: Record<string, unknown>): Promise<T> {

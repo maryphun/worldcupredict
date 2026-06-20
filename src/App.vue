@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import BetView from './BetView.vue';
-import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type Match, type Prediction, type Snapshot, type User } from './api';
+import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type CoinTransferEntry, type Match, type Prediction, type Snapshot, type User } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
 const MATCH_WINDOW_HOURS = 24;
 const PREVIOUS_MATCH_LIMIT = 20;
+const STARTING_COINS = 1000;
 
-const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [] };
+const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [], coinTransfers: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
 const loading = ref(false);
 const loadingAction = ref('');
@@ -18,6 +19,8 @@ const data = ref<Snapshot>(emptySnapshot);
 const authMode = ref<'login' | 'register'>('login');
 const activeView = ref<ViewKey>('matches');
 const selectedMatchId = ref('');
+const selectedUserId = ref('');
+const transferAmount = ref('');
 
 const auth = reactive({ username: '', displayName: '', password: '' });
 const draftPredictions = reactive<Record<string, { predictedResult: 'home' | 'draw' | 'away' | ''; tokenAmount: number }>>({});
@@ -73,6 +76,68 @@ const displayLeaderboard = computed(() => {
     })
     .sort((a, b) => b.displayTotal - a.displayTotal || b.displayWins - a.displayWins || a.displayLosses - b.displayLosses || a.displayName.localeCompare(b.displayName));
 });
+const selectedUserProfile = computed(() => {
+  if (!selectedUserId.value) return null;
+  return displayLeaderboard.value.find((entry) => entry.userId === selectedUserId.value)
+    || (user.value?.userId === selectedUserId.value
+      ? { userId: user.value.userId, displayName: user.value.displayName, displayTotal: user.value.tokenBalance ?? STARTING_COINS, displayWins: 0, displayLosses: 0 }
+      : null);
+});
+const selectedUserBets = computed(() => {
+  if (!selectedUserId.value) return [];
+  return betHistory.value
+    .filter((entry) => entry.userId === selectedUserId.value)
+    .sort((a, b) => new Date(b.updatedAt || b.kickoffAt).getTime() - new Date(a.updatedAt || a.kickoffAt).getTime());
+});
+const selectedUserTransfers = computed(() => {
+  if (!selectedUserId.value) return [];
+  return (data.value.coinTransfers ?? [])
+    .filter((entry) => entry.fromUserId === selectedUserId.value || entry.toUserId === selectedUserId.value)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+});
+const selectedUserTimeline = computed(() => {
+  const events = [
+    ...selectedUserBets.value
+      .filter((entry) => entry.resultStatus === 'won' || entry.resultStatus === 'lost')
+      .map((entry) => ({
+        at: entry.kickoffAt,
+        label: entry.matchLabel,
+        delta: entry.resultStatus === 'won' ? Number(entry.points || 0) - Number(entry.tokenAmount || 0) : -Number(entry.tokenAmount || 0),
+      })),
+    ...selectedUserTransfers.value.map((entry) => ({
+      at: entry.createdAt,
+      label: entry.fromUserId === selectedUserId.value ? `Sent to ${entry.toDisplayName}` : `Received from ${entry.fromDisplayName}`,
+      delta: entry.fromUserId === selectedUserId.value ? -Number(entry.amount || 0) : Number(entry.amount || 0),
+    })),
+  ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
+  let balance = STARTING_COINS;
+  return [
+    { at: '', label: 'Start', balance },
+    ...events.map((event) => {
+      balance += event.delta;
+      return { ...event, balance: Math.max(0, Math.floor(balance)) };
+    }),
+  ];
+});
+const selectedUserGraphPoints = computed(() => {
+  const points = selectedUserTimeline.value;
+  if (!points.length) return '';
+  const width = 320;
+  const height = 128;
+  const pad = 14;
+  const balances = points.map((point) => point.balance);
+  const min = Math.min(...balances, STARTING_COINS);
+  const max = Math.max(...balances, STARTING_COINS);
+  const spread = Math.max(1, max - min);
+
+  return points.map((point, index) => {
+    const x = points.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (points.length - 1);
+    const y = height - pad - ((point.balance - min) / spread) * (height - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+});
+const canTransferToSelectedUser = computed(() => Boolean(user.value && selectedUserProfile.value && selectedUserProfile.value.userId !== user.value.userId));
 const currentMatches = computed(() => {
   if (activeView.value === 'matches') return mainMatches.value;
   if (activeView.value === 'previous') return previousMatches.value;
@@ -257,6 +322,7 @@ function seedDrafts() {
 function applySnapshot(nextSnapshot: Snapshot) {
   data.value = nextSnapshot;
   if (!data.value.betHistory) data.value.betHistory = [];
+  if (!data.value.coinTransfers) data.value.coinTransfers = [];
   seedDrafts();
 }
 
@@ -290,6 +356,38 @@ function isEntryWithinMatchWindow(entry: BetHistoryEntry) {
 
 function openBet(match: Match) {
   selectedMatchId.value = match.matchId;
+}
+
+function openUserProfile(userId: string) {
+  selectedUserId.value = userId;
+  transferAmount.value = '';
+}
+
+function closeUserProfile() {
+  selectedUserId.value = '';
+  transferAmount.value = '';
+}
+
+async function submitTransfer() {
+  if (!selectedUserProfile.value || !canTransferToSelectedUser.value) return;
+  const amount = Number(transferAmount.value);
+  if (!Number.isInteger(amount) || amount < 1) {
+    message.value = 'Transfer amount must be at least 1 coin.';
+    return;
+  }
+
+  await mutate({
+    action: 'transferCoins',
+    token: token.value,
+    toUserId: selectedUserProfile.value.userId,
+    amount,
+  }, 'transfer');
+  transferAmount.value = '';
+}
+
+function transferText(entry: CoinTransferEntry) {
+  if (entry.fromUserId === selectedUserId.value) return `Sent ${entry.amount} coins to ${entry.toDisplayName}`;
+  return `Received ${entry.amount} coins from ${entry.fromDisplayName}`;
 }
 
 async function savePredictionFromBetView(predictedResult: 'home' | 'draw' | 'away', tokenAmount: number) {
@@ -408,6 +506,7 @@ function errorText(err: unknown) {
         @back="selectedMatchId = ''"
         @save-prediction="savePredictionFromBetView"
         @report-score="reportScoreFromBetView"
+        @open-user="openUserProfile"
       />
 
       <template v-else>
@@ -428,7 +527,16 @@ function errorText(err: unknown) {
             </div>
           </div>
           <ol class="leaderboard">
-            <li v-for="(entry, index) in displayLeaderboard" :key="entry.userId">
+            <li
+              v-for="(entry, index) in displayLeaderboard"
+              :key="entry.userId"
+              class="profile-trigger"
+              role="button"
+              tabindex="0"
+              @click="openUserProfile(entry.userId)"
+              @keydown.enter.prevent="openUserProfile(entry.userId)"
+              @keydown.space.prevent="openUserProfile(entry.userId)"
+            >
               <strong class="leaderboard-rank">{{ index + 1 }}</strong>
               <span class="leaderboard-player">
                 <span>{{ entry.displayName }}</span>
@@ -504,7 +612,17 @@ function errorText(err: unknown) {
         <p v-if="!visibleBetHistory.length" class="empty-state">No bets in the 24-hour window yet.</p>
 
         <div class="history-grid">
-          <article v-for="entry in visibleBetHistory" :key="entry.predictionId" class="history-card" :class="{ mine: entry.isMine }">
+          <article
+            v-for="entry in visibleBetHistory"
+            :key="entry.predictionId"
+            class="history-card profile-trigger"
+            :class="{ mine: entry.isMine }"
+            role="button"
+            tabindex="0"
+            @click="openUserProfile(entry.userId)"
+            @keydown.enter.prevent="openUserProfile(entry.userId)"
+            @keydown.space.prevent="openUserProfile(entry.userId)"
+          >
             <div class="history-top">
               <div class="history-person">
                 <strong>{{ entry.displayName }}</strong>
@@ -537,5 +655,82 @@ function errorText(err: unknown) {
       </section>
       </template>
     </template>
+
+    <div v-if="selectedUserProfile" class="profile-backdrop" role="dialog" aria-modal="true" @click.self="closeUserProfile">
+      <section class="profile-modal">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Player profile</p>
+            <h2>{{ selectedUserProfile.displayName }}</h2>
+          </div>
+          <button type="button" class="ghost-button small-button" @click="closeUserProfile">Close</button>
+        </div>
+
+        <div class="profile-summary">
+          <span>
+            <small>Coins</small>
+            <strong>{{ selectedUserProfile.displayTotal }}</strong>
+          </span>
+          <span>
+            <small>Record</small>
+            <strong>{{ selectedUserProfile.displayWins }}W / {{ selectedUserProfile.displayLosses }}L</strong>
+          </span>
+          <span>
+            <small>Bets</small>
+            <strong>{{ selectedUserBets.length }}</strong>
+          </span>
+        </div>
+
+        <div class="profile-graph">
+          <div class="section-head compact-head">
+            <h3>Coin history</h3>
+            <span>{{ selectedUserTimeline[selectedUserTimeline.length - 1]?.balance ?? STARTING_COINS }} coins</span>
+          </div>
+          <svg viewBox="0 0 320 128" role="img" aria-label="Coin history graph">
+            <polyline :points="selectedUserGraphPoints" />
+          </svg>
+        </div>
+
+        <form v-if="canTransferToSelectedUser" class="transfer-form" @submit.prevent="submitTransfer">
+          <label>
+            Transfer coins
+            <input v-model="transferAmount" type="number" inputmode="numeric" min="1" :max="user?.tokenBalance ?? 0" placeholder="Amount" />
+          </label>
+          <button type="submit" :class="{ 'is-loading': isLoadingAction('transfer') }" :disabled="loading">Send</button>
+        </form>
+        <p v-else class="muted profile-muted">This is you, so coin transfer is hidden.</p>
+
+        <div class="profile-columns">
+          <section>
+            <div class="section-head compact-head">
+              <h3>Bet history</h3>
+              <span>{{ selectedUserBets.length }}</span>
+            </div>
+            <p v-if="!selectedUserBets.length" class="empty-state compact-empty">No bets yet.</p>
+            <div v-else class="profile-list">
+              <article v-for="entry in selectedUserBets" :key="entry.predictionId">
+                <strong>{{ entry.matchLabel }}</strong>
+                <span>{{ entry.token }} · {{ entry.tokenAmount }} coins · {{ formatOdds(entry.oddsAtPrediction) }} odds</span>
+                <small>{{ statusText(entry.resultStatus) }} · {{ formatKickoff(entry.updatedAt || entry.kickoffAt) }}</small>
+              </article>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head compact-head">
+              <h3>Coin activity</h3>
+              <span>{{ selectedUserTransfers.length }}</span>
+            </div>
+            <p v-if="!selectedUserTransfers.length" class="empty-state compact-empty">No transfers yet.</p>
+            <div v-else class="profile-list">
+              <article v-for="entry in selectedUserTransfers" :key="entry.transferId">
+                <strong>{{ transferText(entry) }}</strong>
+                <small>{{ formatKickoff(entry.createdAt) }}</small>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
