@@ -37,6 +37,12 @@ const tokenAmount = computed(() => Number(tokenInput.value || 0));
 const maxBetTokens = computed(() => Math.max(0, Number(props.tokenBalance || 0) + Number(props.predictionDraft?.tokenAmount || 0)));
 const isOverBalance = computed(() => tokenAmount.value > maxBetTokens.value);
 const existingStake = computed(() => Number(props.predictionDraft?.tokenAmount || 0));
+const selectedOption = computed(() => pickOptions.value.find((option) => option.key === selectedPick.value));
+const selectedOddsMultiplier = computed(() => {
+  const odds = Number(selectedOption.value?.odds);
+  return Number.isFinite(odds) && odds > 0 ? odds : 2;
+});
+const potentialReturn = computed(() => Math.floor(tokenAmount.value * selectedOddsMultiplier.value));
 const currentPickLabel = computed(() => pickOptions.value.find((option) => option.key === props.predictionDraft?.predictedResult)?.label || '');
 const isChangingPick = computed(() => Boolean(props.predictionDraft?.predictedResult && selectedPick.value && props.predictionDraft.predictedResult !== selectedPick.value));
 
@@ -223,10 +229,15 @@ function formatOdds(value: number | string | '') {
           <h2>Coin amount</h2>
           <button type="button" class="ghost-button small-button" @click="modalOpen = false">Close</button>
         </div>
-        <p class="token-pick">Pick: <strong>{{ pickOptions.find((option) => option.key === selectedPick)?.label }}</strong></p>
+        <p class="token-pick">Pick: <strong>{{ selectedOption?.label }}</strong></p>
         <p class="token-help">Available to bet: <strong>{{ maxBetTokens }}</strong> coins</p>
         <p v-if="isChangingPick" class="token-warning">This replaces your {{ currentPickLabel }} bet for this match.</p>
         <div class="token-display">{{ tokenInput || '0' }}</div>
+        <div class="return-preview">
+          <span>If correct</span>
+          <strong>{{ potentialReturn }} coins</strong>
+          <small>{{ tokenAmount || 0 }} coins x {{ selectedOddsMultiplier.toFixed(2) }} odds</small>
+        </div>
         <p v-if="isOverBalance" class="token-warning">Not enough coins for this bet.</p>
         <div class="numpad" aria-label="Coin numpad">
           <button v-for="digit in ['1','2','3','4','5','6','7','8','9']" :key="digit" type="button" @click="pressDigit(digit)">{{ digit }}</button>

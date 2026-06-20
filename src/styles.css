@@ -600,6 +600,28 @@ h3 {
   text-align: right;
 }
 
+.return-preview {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(47, 111, 228, 0.2);
+  border-radius: 20px;
+  padding: 14px;
+  color: #5b6f91;
+  background: linear-gradient(135deg, #f7fbff, #eef5ff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.return-preview span,
+.return-preview small {
+  font-weight: 850;
+}
+
+.return-preview strong {
+  color: #061733;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
 .numpad {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
