@@ -760,9 +760,10 @@ label {
 
 .utility-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
-  gap: 14px;
-  margin-bottom: 22px;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(280px, 1.1fr);
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
 .non-admin-utility {
@@ -770,7 +771,7 @@ label {
 }
 
 .stat-card {
-  padding: 20px;
+  padding: 16px;
 }
 
 .section-head {
@@ -780,10 +781,27 @@ label {
   margin-bottom: 14px;
 }
 
+.leaderboard-head {
+  justify-content: center;
+  text-align: center;
+}
+
+.leaderboard-head > div {
+  width: 100%;
+}
+
+.leaderboard-head h2 {
+  margin: 0;
+  color: #061733;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  font-weight: 1000;
+  line-height: 1.05;
+}
+
 .leaderboard-prize {
-  margin: 4px 0 0;
+  margin: 7px 0 0;
   color: #5b6f91;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 850;
 }
 
@@ -795,7 +813,7 @@ label {
 
 .leaderboard {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -817,8 +835,8 @@ label {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  border-radius: 18px;
-  padding: 10px 12px;
+  border-radius: 16px;
+  padding: 8px 10px;
   background: #f3f7ff;
 }
 
@@ -837,8 +855,8 @@ label {
 .leaderboard-rank {
   display: inline-grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 1.85rem;
+  height: 1.85rem;
   border: 1px solid rgba(47, 111, 228, 0.24);
   border-radius: 999px;
   color: #ffffff;
@@ -849,19 +867,47 @@ label {
 
 .leaderboard-player {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .leaderboard-player > span {
   overflow: hidden;
+  color: #061733;
+  font-size: 1.02rem;
+  font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .leaderboard-player small {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: 0.78rem;
   font-weight: 850;
+}
+
+.record-win {
+  color: #0a8f4d;
+}
+
+.record-loss {
+  color: #c32746;
+}
+
+.active-bet-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  border: 1px solid rgba(47, 111, 228, 0.26);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: #08449f;
+  background: #ffffff;
+  box-shadow: 0 5px 12px rgba(10, 61, 145, 0.08);
+  white-space: nowrap;
 }
 
 .profile-trigger {
@@ -879,20 +925,32 @@ label {
 
 .approval {
   align-items: center;
-  padding: 10px 0;
+  padding: 8px 0;
   border-top: 1px solid #e4ebf7;
 }
 
 .approval div {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .admin-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+}
+
+.admin-card {
+  align-self: start;
+}
+
+.admin-card .section-head {
+  margin-bottom: 8px;
+}
+
+.admin-card .muted {
+  margin: 0;
 }
 
 .muted,
@@ -903,6 +961,7 @@ small {
 .content-section {
   display: grid;
   gap: 14px;
+  scroll-margin-top: 18px;
 }
 
 .match-grid,
@@ -910,6 +969,11 @@ small {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.match-card,
+.history-card {
+  scroll-margin-top: 18px;
 }
 
 .match-meta,
@@ -1745,6 +1809,10 @@ small {
   .leaderboard li,
   .non-admin-utility .leaderboard li {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .leaderboard-player small {
+    gap: 7px;
   }
 
   .non-admin-utility .leaderboard {

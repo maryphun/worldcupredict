@@ -56,6 +56,15 @@ const waitingCoinsByUser = computed(() => {
     return map;
   }, {});
 });
+const activeBetsByUser = computed(() => {
+  return betHistory.value.reduce<Record<string, number>>((map, entry) => {
+    const matchStatus = (entry.matchStatus || '').toLowerCase();
+    if (entry.resultStatus !== 'pending') return map;
+    if (['final', 'postponed', 'cancelled'].includes(matchStatus)) return map;
+    map[entry.userId] = (map[entry.userId] ?? 0) + 1;
+    return map;
+  }, {});
+});
 const settledRecordByUser = computed(() => {
   return betHistory.value.reduce<Record<string, { wins: number; losses: number }>>((map, entry) => {
     if (!map[entry.userId]) map[entry.userId] = { wins: 0, losses: 0 };
@@ -73,6 +82,7 @@ const displayLeaderboard = computed(() => {
         displayTotal: leaderboardCoins(entry),
         displayWins: Math.max(Number(entry.wins ?? 0), record.wins),
         displayLosses: Math.max(Number(entry.losses ?? 0), record.losses),
+        activeBetCount: activeBetsByUser.value[entry.userId] ?? 0,
       };
     })
     .sort((a, b) => b.displayTotal - a.displayTotal || b.displayWins - a.displayWins || a.displayLosses - b.displayLosses || a.displayName.localeCompare(b.displayName));
@@ -372,6 +382,15 @@ function isEntryWithinMatchWindow(entry: BetHistoryEntry) {
   return kickoff >= now - windowMs && kickoff <= now + windowMs;
 }
 
+function selectView(view: ViewKey) {
+  activeView.value = view;
+  nextTick(() => {
+    const cardSelector = view === 'history' ? '.history-grid .history-card' : '.match-grid .match-card-button';
+    const target = document.querySelector<HTMLElement>(cardSelector) || document.querySelector<HTMLElement>('[data-content-start]');
+    target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+}
+
 function openBet(match: Match) {
   selectedMatchId.value = match.matchId;
   nextTick(() => {
@@ -540,7 +559,7 @@ function errorText(err: unknown) {
 
       <template v-else>
       <nav class="view-tabs" aria-label="Main views">
-        <button v-for="card in viewCards" :key="card.key" type="button" class="view-tab" :class="{ active: activeView === card.key }" @click="activeView = card.key">
+        <button v-for="card in viewCards" :key="card.key" type="button" class="view-tab" :class="{ active: activeView === card.key }" @click="selectView(card.key)">
           <span>{{ card.label }}</span>
           <strong>{{ card.count }}</strong>
         </button>
@@ -548,9 +567,9 @@ function errorText(err: unknown) {
 
       <section class="utility-grid" :class="{ 'non-admin-utility': user.role !== 'admin' }">
         <div class="stat-card leaderboard-card">
-          <div class="section-head">
+          <div class="section-head leaderboard-head">
             <div>
-              <h2>Coin leaderboard</h2>
+              <h2>Ländüğüï Leaderboard</h2>
               <p class="leaderboard-prize">&#31532;&#19968;&#21517;&#21487;&#20197;&#25910;&#29554;&#19968;&#20491;&#12300;&#31639;&#20320;&#21426;&#23475;&#12301;</p>
             </div>
           </div>
@@ -568,7 +587,11 @@ function errorText(err: unknown) {
               <strong class="leaderboard-rank">{{ index + 1 }}</strong>
               <span class="leaderboard-player">
                 <span>{{ entry.displayName }}</span>
-                <small>{{ entry.displayWins }}W / {{ entry.displayLosses }}L</small>
+                <small>
+                  <span class="record-win">{{ entry.displayWins }}W</span>
+                  <span class="record-loss">{{ entry.displayLosses }}L</span>
+                  <span v-if="entry.activeBetCount" class="active-bet-chip">{{ entry.activeBetCount }} active {{ entry.activeBetCount === 1 ? 'bet' : 'bets' }}</span>
+                </small>
               </span>
               <strong>{{ entry.displayTotal }} coins</strong>
             </li>
@@ -595,7 +618,7 @@ function errorText(err: unknown) {
         </div>
       </section>
 
-      <section v-if="activeView !== 'history'" class="content-section">
+      <section v-if="activeView !== 'history'" class="content-section" data-content-start>
         <div class="section-head">
           <h2>{{ viewCards.find((card) => card.key === activeView)?.label }}</h2>
           <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
@@ -631,7 +654,7 @@ function errorText(err: unknown) {
         </div>
       </section>
 
-      <section v-else class="content-section">
+      <section v-else class="content-section" data-content-start>
         <div class="section-head">
           <h2>Bet history</h2>
           <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
