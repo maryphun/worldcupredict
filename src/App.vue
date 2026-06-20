@@ -40,13 +40,10 @@ const visibleBetHistory = computed(() => betHistory.value.filter((entry) => isEn
 const selectedMatch = computed(() => matches.value.find((match) => match.matchId === selectedMatchId.value));
 const selectedMatchEntries = computed(() => betHistory.value.filter((entry) => entry.matchId === selectedMatchId.value));
 const betCountsByMatch = computed(() => {
-  const bettorsByMatch = betHistory.value.reduce<Record<string, Set<string>>>((map, entry) => {
-    if (!map[entry.matchId]) map[entry.matchId] = new Set();
-    map[entry.matchId].add(entry.userId);
+  return betHistory.value.reduce<Record<string, number>>((map, entry) => {
+    map[entry.matchId] = (map[entry.matchId] ?? 0) + 1;
     return map;
   }, {});
-
-  return Object.fromEntries(Object.entries(bettorsByMatch).map(([matchId, bettors]) => [matchId, bettors.size]));
 });
 const waitingCoinsByUser = computed(() => {
   return betHistory.value.reduce<Record<string, number>>((map, entry) => {
