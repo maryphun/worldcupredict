@@ -13,6 +13,7 @@ const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], lead
 const token = ref(localStorage.getItem('wc-token') || '');
 const loading = ref(false);
 const loadingAction = ref('');
+const booting = ref(Boolean(token.value));
 const message = ref('');
 const connection = ref(apiBaseConfigured ? 'Checking backend...' : 'Set VITE_API_BASE to your Apps Script Web App URL.');
 const data = ref<Snapshot>(emptySnapshot);
@@ -156,8 +157,12 @@ const predictionsByMatch = computed(() => {
 });
 
 onMounted(async () => {
-  await checkBackend();
-  await load();
+  try {
+    await checkBackend();
+    await load();
+  } finally {
+    booting.value = false;
+  }
 });
 
 async function checkBackend() {
@@ -176,15 +181,22 @@ async function load(action = 'refresh') {
   loadingAction.value = action;
   message.value = '';
   try {
-    applySnapshot(await snapshot(token.value));
+    const nextSnapshot = await snapshot(token.value);
+    if (token.value && !nextSnapshot.user) {
+      message.value = 'Saved login expired. Please log in again.';
+      return;
+    }
+    applySnapshot(nextSnapshot);
   } catch (err) {
     message.value = errorText(err);
-    token.value = '';
-    localStorage.removeItem('wc-token');
   } finally {
     loading.value = false;
     loadingAction.value = '';
   }
+}
+
+async function refreshMainPage() {
+  await load('refresh');
 }
 
 async function submitAuth() {
@@ -463,7 +475,10 @@ function errorText(err: unknown) {
           <strong>{{ user.tokenBalance ?? 0 }}</strong>
         </div>
         <span>{{ user.displayName }}</span>
-        <button type="button" class="ghost-button" @click="logout">Log out</button>
+        <div class="account-actions">
+          <button type="button" class="ghost-button" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="refreshMainPage">Refresh</button>
+          <button type="button" class="ghost-button" @click="logout">Log out</button>
+        </div>
       </div>
     </header>
 
@@ -471,7 +486,12 @@ function errorText(err: unknown) {
     <div v-if="loading" class="loading-bar" aria-hidden="true"><span></span></div>
     <p v-if="message" class="notice">{{ message }}</p>
 
-    <section v-if="!user" class="auth-card">
+    <section v-if="!user && booting" class="auth-card session-card">
+      <h2>Loading your page...</h2>
+      <p class="muted">Restoring saved login.</p>
+    </section>
+
+    <section v-else-if="!user" class="auth-card">
       <div class="tabs">
         <button :class="{ active: authMode === 'login' }" type="button" :disabled="loading" @click="authMode = 'login'">Log in</button>
         <button :class="{ active: authMode === 'register' }" type="button" :disabled="loading" @click="authMode = 'register'">Request access</button>
