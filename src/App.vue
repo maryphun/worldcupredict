@@ -82,7 +82,7 @@ const finishedBetsByUser = computed(() => {
 });
 const displayLeaderboard = computed(() => {
   return data.value.leaderboard
-    .filter((entry) => (finishedBetsByUser.value[entry.userId] ?? 0) >= 2)
+    .filter((entry) => (finishedBetsByUser.value[entry.userId] ?? 0) >= 1)
     .map((entry) => {
       const record = settledRecordByUser.value[entry.userId] ?? { wins: 0, losses: 0 };
       return {
@@ -699,7 +699,7 @@ function errorText(err: unknown) {
               <strong>{{ entry.displayTotal }} coins</strong>
             </li>
           </ol>
-          <p class="leaderboard-disclaimer">Leaderboard ranking starts after a player has at least 2 finished bets. Active bets do not count yet.</p>
+          <p class="leaderboard-disclaimer">Leaderboard ranking starts after a player has at least 1 finished bet. Active bets do not count yet.</p>
         </div>
 
         <div v-if="user.role === 'admin'" class="stat-card admin-card">
