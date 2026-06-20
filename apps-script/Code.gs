@@ -607,9 +607,7 @@ function refreshMatches_(incoming) {
   var existingById = {};
   matches.rows.forEach(function(match) {
     if (!match.matchId) return;
-    if (!existingById[match.matchId] || match.scoreSource === 'manual' || match.oddsSource === 'manual') {
-      existingById[match.matchId] = match;
-    }
+    existingById[match.matchId] = mergeExistingMatchSnapshot_(existingById[match.matchId], match);
   });
 
   var seen = {};
@@ -639,9 +637,7 @@ function mergeExistingMatch_(incoming, existing) {
     match.manualUpdatedBy = existing.manualUpdatedBy;
   }
 
-  var incomingHasOdds = incoming.oddsHome !== '' || incoming.oddsDraw !== '' || incoming.oddsAway !== '';
-  var existingHasOdds = existing.oddsHome !== '' || existing.oddsDraw !== '' || existing.oddsAway !== '';
-  if (existingHasOdds) {
+  if (hasMatchOdds_(existing)) {
     match.oddsHome = existing.oddsHome;
     match.oddsDraw = existing.oddsDraw;
     match.oddsAway = existing.oddsAway;
@@ -649,6 +645,39 @@ function mergeExistingMatch_(incoming, existing) {
   }
 
   return match;
+}
+
+function mergeExistingMatchSnapshot_(current, candidate) {
+  if (!current) return Object.assign({}, candidate);
+  var merged = Object.assign({}, current);
+
+  if (candidate.scoreSource === 'manual') {
+    merged.status = candidate.status || merged.status;
+    merged.homeScore = candidate.homeScore;
+    merged.awayScore = candidate.awayScore;
+    merged.scoreSource = 'manual';
+    merged.manualUpdatedBy = candidate.manualUpdatedBy;
+  }
+
+  if (!hasMatchOdds_(merged) && hasMatchOdds_(candidate)) {
+    merged.oddsHome = candidate.oddsHome;
+    merged.oddsDraw = candidate.oddsDraw;
+    merged.oddsAway = candidate.oddsAway;
+    merged.oddsSource = candidate.oddsSource || 'manual';
+  }
+
+  if (candidate.oddsSource === 'manual' || candidate.oddsSource === 'odds-api') {
+    merged.oddsHome = candidate.oddsHome;
+    merged.oddsDraw = candidate.oddsDraw;
+    merged.oddsAway = candidate.oddsAway;
+    merged.oddsSource = candidate.oddsSource;
+  }
+
+  return merged;
+}
+
+function hasMatchOdds_(match) {
+  return !!match && (match.oddsHome !== '' || match.oddsDraw !== '' || match.oddsAway !== '');
 }
 
 function replaceRows_(name, rows) {
