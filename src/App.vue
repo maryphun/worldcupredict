@@ -546,7 +546,7 @@ function errorText(err: unknown) {
       <template v-else>
       <nav class="view-tabs" aria-label="Main views">
         <button v-for="card in viewCards" :key="card.key" type="button" class="view-tab" :class="{ active: activeView === card.key }" @click="selectView(card.key)">
-          <span>{{ card.label }}</span>
+          <span>{{ card.label.replace(' ', '\n') }}</span>
           <strong>{{ card.count }}</strong>
         </button>
       </nav>

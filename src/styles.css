@@ -747,7 +747,8 @@ label {
   font-size: 0.94rem;
   font-weight: 900;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-line;
+  line-height: 1.08;
 }
 
 .view-tab strong {
@@ -1806,7 +1807,7 @@ small {
   }
 
   .view-tab {
-    min-height: 44px;
+    min-height: 52px;
     gap: 4px;
     border-radius: 15px;
     padding: 0 6px;
@@ -1814,6 +1815,8 @@ small {
 
   .view-tab span {
     font-size: 0.78rem;
+    text-align: center;
+    text-overflow: clip;
   }
 
   .view-tab strong {
