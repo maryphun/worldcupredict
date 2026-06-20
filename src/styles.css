@@ -1345,7 +1345,7 @@ small {
 
 .profile-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1386,7 +1386,7 @@ small {
 .profile-graph svg {
   display: block;
   width: 100%;
-  height: 150px;
+  height: 178px;
   border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.18)),
@@ -1399,6 +1399,32 @@ small {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 5;
+}
+
+.profile-graph circle {
+  fill: #ffffff;
+  stroke: #0b4db6;
+  stroke-width: 2.4;
+}
+
+.profile-graph text {
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.profile-graph .graph-value {
+  fill: #061733;
+  font-size: 0.66rem;
+  font-weight: 950;
+}
+
+.profile-graph .graph-date {
+  fill: #5b6f91;
+  font-size: 0.62rem;
+  font-weight: 850;
 }
 
 .transfer-form {

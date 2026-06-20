@@ -87,8 +87,20 @@ const selectedUserProfile = computed(() => {
   if (!selectedUserId.value) return null;
   return displayLeaderboard.value.find((entry) => entry.userId === selectedUserId.value)
     || (user.value?.userId === selectedUserId.value
-      ? { userId: user.value.userId, displayName: user.value.displayName, displayTotal: user.value.tokenBalance ?? STARTING_COINS, displayWins: 0, displayLosses: 0 }
+      ? { userId: user.value.userId, displayName: user.value.displayName, displayTotal: user.value.tokenBalance ?? STARTING_COINS, availableCoins: user.value.tokenBalance ?? STARTING_COINS, waitingCoins: 0, displayWins: 0, displayLosses: 0 }
       : null);
+});
+const selectedUserHoldCoins = computed(() => {
+  if (!selectedUserId.value) return 0;
+  const localHold = waitingCoinsByUser.value[selectedUserId.value] ?? 0;
+  const profileHold = Number(selectedUserProfile.value?.waitingCoins ?? 0);
+  return Math.max(0, Math.floor(Number.isFinite(profileHold) ? Math.max(localHold, profileHold) : localHold));
+});
+const selectedUserAvailableCoins = computed(() => {
+  const direct = Number(selectedUserProfile.value?.availableCoins);
+  if (Number.isFinite(direct)) return Math.max(0, Math.floor(direct));
+  const total = Number(selectedUserProfile.value?.displayTotal ?? STARTING_COINS);
+  return Math.max(0, Math.floor(total - selectedUserHoldCoins.value));
 });
 const selectedUserBets = computed(() => {
   if (!selectedUserId.value) return [];
@@ -127,22 +139,39 @@ const selectedUserTimeline = computed(() => {
     }),
   ];
 });
-const selectedUserGraphPoints = computed(() => {
+const selectedUserGraphItems = computed(() => {
   const points = selectedUserTimeline.value;
-  if (!points.length) return '';
+  if (!points.length) return [];
   const width = 320;
-  const height = 128;
-  const pad = 14;
+  const plotTop = 24;
+  const plotBottom = 124;
+  const pad = 16;
   const balances = points.map((point) => point.balance);
   const min = Math.min(...balances, STARTING_COINS);
   const max = Math.max(...balances, STARTING_COINS);
   const spread = Math.max(1, max - min);
+  let lastDateLabel = '';
 
   return points.map((point, index) => {
     const x = points.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (points.length - 1);
-    const y = height - pad - ((point.balance - min) / spread) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+    const y = plotBottom - ((point.balance - min) / spread) * (plotBottom - plotTop);
+    const previousX = index > 0 ? pad + ((index - 1) * (width - pad * 2)) / Math.max(1, points.length - 1) : -Infinity;
+    const nextX = index < points.length - 1 ? pad + ((index + 1) * (width - pad * 2)) / Math.max(1, points.length - 1) : Infinity;
+    const dateLabel = graphDateLabel(point.at);
+    const showDate = dateLabel && dateLabel !== lastDateLabel;
+    if (dateLabel) lastDateLabel = dateLabel;
+    return {
+      ...point,
+      x,
+      y,
+      dateLabel,
+      showDate,
+      showValue: Math.min(x - previousX, nextX - x) >= 42 || points.length <= 6,
+    };
+  });
+});
+const selectedUserGraphPoints = computed(() => {
+  return selectedUserGraphItems.value.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
 });
 const canTransferToSelectedUser = computed(() => Boolean(user.value && selectedUserProfile.value && selectedUserProfile.value.userId !== user.value.userId));
 const currentMatches = computed(() => {
@@ -466,6 +495,13 @@ function formatKickoff(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+function graphDateLabel(value: string) {
+  if (!value) return 'Start';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
 function formatOdds(value: number | string | '') {
   if (value === '' || value == null) return '-';
   const n = Number(value);
@@ -705,8 +741,12 @@ function errorText(err: unknown) {
 
         <div class="profile-summary">
           <span>
-            <small>Coins</small>
-            <strong>{{ selectedUserProfile.displayTotal }}</strong>
+            <small>Available</small>
+            <strong>{{ selectedUserAvailableCoins }}</strong>
+          </span>
+          <span>
+            <small>On hold</small>
+            <strong>{{ selectedUserHoldCoins }}</strong>
           </span>
           <span>
             <small>Record</small>
@@ -723,8 +763,13 @@ function errorText(err: unknown) {
             <h3>Coin history</h3>
             <span>{{ selectedUserTimeline[selectedUserTimeline.length - 1]?.balance ?? STARTING_COINS }} coins</span>
           </div>
-          <svg viewBox="0 0 320 128" role="img" aria-label="Coin history graph">
+          <svg viewBox="0 0 320 164" role="img" aria-label="Coin history graph">
             <polyline :points="selectedUserGraphPoints" />
+            <g v-for="point in selectedUserGraphItems" :key="`${point.at}-${point.balance}-${point.x}`">
+              <text v-if="point.showValue" class="graph-value" :x="point.x" :y="Math.max(12, point.y - 9)">{{ point.balance }}</text>
+              <circle :cx="point.x" :cy="point.y" r="3.4" />
+              <text v-if="point.showDate" class="graph-date" :x="point.x" y="154">{{ point.dateLabel }}</text>
+            </g>
           </svg>
         </div>
 
