@@ -30,7 +30,7 @@ const winnerOptions = computed<BetOption[]>(() => [
   { optionId: `${props.match.matchId}:h2h:draw`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'draw', outcomeLabel: 'Draw', line: '', odds: props.match.oddsDraw },
   { optionId: `${props.match.matchId}:h2h:away`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'away', outcomeLabel: props.match.awayTeam, line: '', odds: props.match.oddsAway },
 ]);
-const sideOptions = computed(() => props.match.sideOdds ?? []);
+const sideOptions = computed(() => (props.match.sideOdds ?? []).filter(isDisplayableBetOption));
 const sideMarketGroups = computed(() => {
   const groups = sideOptions.value.reduce<Record<string, { label: string; options: BetOption[] }>>((map, option) => {
     const key = option.marketType;
@@ -87,6 +87,11 @@ function choosePick(option: BetOption) {
       tokenModal.value?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
     });
   });
+}
+
+function isDisplayableBetOption(option: BetOption) {
+  if (option.marketType !== 'correct_score') return true;
+  return /^\d{1,2}\s*[-:]\s*\d{1,2}$/.test(String(option.outcomeLabel || '').trim());
 }
 
 function isPickBlocked(option: BetOption) {

@@ -133,6 +133,16 @@ function installDailyUpcomingOddsTrigger() {
     .create();
 }
 
+function cleanupInvalidCorrectScoreOdds() {
+  var odds = table_(SHEETS.odds);
+  var keptRows = odds.rows.filter(isValidSideOddsRow_);
+  replaceRows_(SHEETS.odds, keptRows);
+  return {
+    removed: odds.rows.length - keptRows.length,
+    remaining: keptRows.length,
+  };
+}
+
 function doGet(e) {
   return handle_((e && e.parameter) || {});
 }
@@ -1023,13 +1033,15 @@ function sideOddsRowsForMatch_(match, sideOdds, source) {
   return (sideOdds || []).map(function(option) {
     var odds = valueOrBlank_(option.odds);
     if (odds === '') return null;
+    var cleanOption = sanitizeSideOddsOption_(option);
+    if (!cleanOption) return null;
     var row = {
       matchId: String(match.matchId),
-      marketType: option.marketType,
-      marketLabel: option.marketLabel,
-      outcomeKey: option.outcomeKey,
-      outcomeLabel: option.outcomeLabel,
-      line: option.line == null ? '' : option.line,
+      marketType: cleanOption.marketType,
+      marketLabel: cleanOption.marketLabel,
+      outcomeKey: cleanOption.outcomeKey,
+      outcomeLabel: cleanOption.outcomeLabel,
+      line: cleanOption.line == null ? '' : cleanOption.line,
       odds: odds,
       source: source,
       lastSyncedAt: nowIso_(),
@@ -1037,7 +1049,7 @@ function sideOddsRowsForMatch_(match, sideOdds, source) {
     row.oddsId = sideOddsId_(row.matchId, row.marketType, row.outcomeKey, row.line);
     return row;
   }).filter(function(row) {
-    return row && row.marketType && row.outcomeKey;
+    return row && isValidSideOddsRow_(row);
   });
 }
 
@@ -1067,6 +1079,40 @@ function sideOddsId_(matchId, marketType, outcomeKey, line) {
   return [matchId, marketType, outcomeKey, line].map(function(part) {
     return String(part == null ? '' : part).trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_');
   }).join('|');
+}
+
+function sanitizeSideOddsOption_(option) {
+  if (!option || !option.marketType || !option.outcomeKey) return null;
+  var clean = {
+    marketType: String(option.marketType || ''),
+    marketLabel: String(option.marketLabel || ''),
+    outcomeKey: String(option.outcomeKey || ''),
+    outcomeLabel: String(option.outcomeLabel || ''),
+    line: option.line == null ? '' : option.line,
+  };
+  if (clean.marketType === 'correct_score') {
+    var score = parseScoreOutcomeLabel_(firstPresent_([
+      clean.outcomeLabel,
+      clean.line,
+      String(clean.outcomeKey).replace(/^score:/, ''),
+    ]));
+    if (!score) return null;
+    clean.marketLabel = clean.marketLabel || 'Correct score';
+    clean.outcomeKey = 'score:' + score;
+    clean.outcomeLabel = score;
+    clean.line = score;
+  }
+  return clean;
+}
+
+function isValidSideOddsRow_(row) {
+  if (!row || !row.marketType || !row.outcomeKey || row.odds === '') return false;
+  if (row.marketType !== 'correct_score') return true;
+  return Boolean(parseScoreOutcomeLabel_(firstPresent_([
+    row.outcomeLabel,
+    row.line,
+    String(row.outcomeKey).replace(/^score:/, ''),
+  ])));
 }
 
 function sideMarketOrder_(marketType) {
@@ -1104,7 +1150,8 @@ function capitalize_(value) {
 
 function parseScoreOutcomeLabel_(value) {
   var text = String(value || '').trim();
-  var match = text.match(/(\d{1,2})\s*[-:]\s*(\d{1,2})/);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text) || /t\d{2}:\d{2}/i.test(text)) return '';
+  var match = text.match(/^(\d{1,2})\s*[-:]\s*(\d{1,2})$/);
   if (!match) return '';
   return Number(match[1]) + '-' + Number(match[2]);
 }
@@ -1717,15 +1764,16 @@ function publicMatch_(match, oddsRows) {
 
 function publicSideOdds_(matchId, oddsRows) {
   return (oddsRows || []).filter(function(row) {
-    return String(row.matchId) === String(matchId) && row.odds !== '';
+    return String(row.matchId) === String(matchId) && isValidSideOddsRow_(row);
   }).map(function(row) {
+    var clean = sanitizeSideOddsOption_(row) || row;
     return {
       optionId: row.oddsId,
-      marketType: row.marketType,
-      marketLabel: row.marketLabel,
-      outcomeKey: row.outcomeKey,
-      outcomeLabel: row.outcomeLabel,
-      line: row.line,
+      marketType: clean.marketType,
+      marketLabel: clean.marketLabel,
+      outcomeKey: clean.outcomeKey,
+      outcomeLabel: clean.outcomeLabel,
+      line: clean.line,
       odds: row.odds,
       source: row.source,
     };
@@ -1777,16 +1825,18 @@ function resolveBetOption_(match, body) {
   var optionId = String(body.optionId || '').trim();
   if (!optionId) throw new Error('Choose an available betting option.');
   var option = find_(table_(SHEETS.odds).rows, function(row) {
-    return String(row.oddsId) === optionId && String(row.matchId) === String(match.matchId) && String(row.marketType) === marketType;
+    return String(row.oddsId) === optionId && String(row.matchId) === String(match.matchId) && String(row.marketType) === marketType && isValidSideOddsRow_(row);
   });
   if (!option || option.odds === '') throw new Error('That side bet is not available anymore.');
+  var cleanOption = sanitizeSideOddsOption_(option);
+  if (!cleanOption) throw new Error('That side bet is not available anymore.');
 
   return {
-    marketType: option.marketType,
-    marketLabel: option.marketLabel,
-    predictedResult: option.outcomeKey,
-    outcomeLabel: option.outcomeLabel,
-    line: option.line,
+    marketType: cleanOption.marketType,
+    marketLabel: cleanOption.marketLabel,
+    predictedResult: cleanOption.outcomeKey,
+    outcomeLabel: cleanOption.outcomeLabel,
+    line: cleanOption.line,
     oddsAtPrediction: valueOrBlank_(option.odds),
   };
 }
