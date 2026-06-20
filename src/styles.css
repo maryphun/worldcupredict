@@ -1470,10 +1470,11 @@ small {
   }
 
   .teams {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     width: 100%;
     max-width: 100%;
-    text-align: left;
+    gap: 8px;
+    text-align: center;
   }
 
   .teams.teams-upcoming {
@@ -1481,17 +1482,14 @@ small {
   }
 
   .teams strong:last-child {
-    justify-content: flex-start;
-    text-align: left;
-  }
-
-  .teams.teams-upcoming strong:last-child {
     justify-content: flex-end;
     text-align: right;
   }
 
   .teams span {
-    justify-self: start;
+    justify-self: center;
+    min-width: 64px;
+    padding: 10px 12px;
   }
 
   .teams strong,
@@ -1545,7 +1543,6 @@ small {
     justify-self: center;
   }
 
-  .odds-row,
   .history-stats,
   .bet-layout,
   .bet-inputs,
@@ -1558,14 +1555,41 @@ small {
   }
 
   .odds-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
     padding: 6px;
   }
 
   .odds-row span,
   .odds-row span:first-child,
   .odds-row span:last-child {
-    justify-content: space-between;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    min-height: 50px;
+    padding: 8px 6px;
+    font-size: 0.78rem;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  .odds-row span:first-child {
+    justify-items: start;
     text-align: left;
+  }
+
+  .odds-row span:nth-child(2) {
+    justify-items: center;
+  }
+
+  .odds-row span:last-child {
+    justify-items: end;
+    text-align: right;
+  }
+
+  .odds-row strong {
+    display: block;
+    font-size: 0.86rem;
   }
 
   .profile-modal {
