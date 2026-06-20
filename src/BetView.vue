@@ -142,7 +142,7 @@ function formatOdds(value: number | string | '') {
     </div>
 
     <div class="bet-layout" :class="{ 'bet-layout-full': match.status !== 'live' }">
-      <div class="bet-slip">
+      <div class="bet-slip" data-bet-target="pick">
         <div class="section-head">
           <h2>Your bet</h2>
           <span class="status-pill">{{ locked ? 'Locked' : 'Open' }}</span>

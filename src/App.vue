@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import BetView from './BetView.vue';
 import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type CoinTransferEntry, type Match, type Prediction, type Snapshot, type User } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
@@ -374,6 +374,9 @@ function isEntryWithinMatchWindow(entry: BetHistoryEntry) {
 
 function openBet(match: Match) {
   selectedMatchId.value = match.matchId;
+  nextTick(() => {
+    document.querySelector('[data-bet-target="pick"]')?.scrollIntoView({ block: 'start' });
+  });
 }
 
 function openUserProfile(userId: string) {

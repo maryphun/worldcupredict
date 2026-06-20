@@ -489,6 +489,10 @@ h3 {
   padding: 18px;
 }
 
+.bet-slip {
+  scroll-margin-top: 16px;
+}
+
 .match-card {
   border-radius: 28px;
 }
