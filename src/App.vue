@@ -5,6 +5,7 @@ import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
+const MATCH_WINDOW_HOURS = 24;
 
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
@@ -23,12 +24,12 @@ const draftScores = reactive<Record<string, { homeScore: number; awayScore: numb
 
 const user = computed(() => data.value.user);
 const matches = computed(() => [...data.value.matches].sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()));
-const previousMatches = computed(() => matches.value.filter((match) => isWithinPreviousDays(match, 3) && (match.status === 'final' || (locked(match) && match.status !== 'live'))));
-const liveMatches = computed(() => matches.value.filter((match) => match.status === 'live'));
-const upcomingMatches = computed(() => matches.value.filter((match) => isWithinNextDays(match, 3) && !locked(match) && match.status === 'scheduled'));
+const previousMatches = computed(() => matches.value.filter((match) => isWithinPreviousHours(match, MATCH_WINDOW_HOURS) && (match.status === 'final' || (locked(match) && match.status !== 'live'))));
+const liveMatches = computed(() => matches.value.filter((match) => match.status === 'live' && isWithinAroundNow(match, MATCH_WINDOW_HOURS)));
+const upcomingMatches = computed(() => matches.value.filter((match) => isWithinNextHours(match, MATCH_WINDOW_HOURS) && !locked(match) && match.status === 'scheduled'));
 const mainMatches = computed(() => [...liveMatches.value, ...upcomingMatches.value]);
 const betHistory = computed(() => data.value.betHistory ?? []);
-const visibleBetHistory = computed(() => betHistory.value.filter((entry) => isEntryWithinThreeDayWindow(entry)));
+const visibleBetHistory = computed(() => betHistory.value.filter((entry) => isEntryWithinMatchWindow(entry)));
 const selectedMatch = computed(() => matches.value.find((match) => match.matchId === selectedMatchId.value));
 const selectedMatchEntries = computed(() => betHistory.value.filter((entry) => entry.matchId === selectedMatchId.value));
 const betCountsByMatch = computed(() => {
@@ -46,9 +47,9 @@ const currentMatches = computed(() => {
   return [];
 });
 const viewCards = computed(() => [
-  { key: 'matches' as const, label: 'Matches', count: mainMatches.value.length, detail: 'Live first, then the next three days' },
-  { key: 'previous' as const, label: 'Previous matches', count: previousMatches.value.length, detail: 'Scores, outcomes, and settled picks' },
-  { key: 'history' as const, label: 'Bet history', count: visibleBetHistory.value.length, detail: 'Group picks, odds, and result status' },
+  { key: 'matches' as const, label: 'Matches', count: mainMatches.value.length, detail: 'Live first, then the next 24 hours' },
+  { key: 'previous' as const, label: 'Previous matches', count: previousMatches.value.length, detail: 'Last 24 hours of scores and outcomes' },
+  { key: 'history' as const, label: 'Bet history', count: visibleBetHistory.value.length, detail: 'Picks tied to the 24-hour match window' },
 ]);
 const predictionsByMatch = computed(() => {
   return data.value.predictions.reduce<Record<string, Prediction>>((map, prediction) => {
@@ -235,22 +236,30 @@ function locked(match: Match) {
   return new Date(match.kickoffAt).getTime() <= Date.now();
 }
 
-function isWithinNextDays(match: Match, days: number) {
+function isWithinNextHours(match: Match, hours: number) {
   const kickoff = new Date(match.kickoffAt).getTime();
   const now = Date.now();
-  return kickoff >= now && kickoff <= now + days * 24 * 60 * 60 * 1000;
+  return kickoff >= now && kickoff <= now + hours * 60 * 60 * 1000;
 }
 
-function isWithinPreviousDays(match: Match, days: number) {
+function isWithinPreviousHours(match: Match, hours: number) {
   const kickoff = new Date(match.kickoffAt).getTime();
   const now = Date.now();
-  return kickoff < now && kickoff >= now - days * 24 * 60 * 60 * 1000;
+  return kickoff < now && kickoff >= now - hours * 60 * 60 * 1000;
 }
 
-function isEntryWithinThreeDayWindow(entry: BetHistoryEntry) {
+function isWithinAroundNow(match: Match, hours: number) {
+  const kickoff = new Date(match.kickoffAt).getTime();
+  const now = Date.now();
+  const windowMs = hours * 60 * 60 * 1000;
+  return kickoff >= now - windowMs && kickoff <= now + windowMs;
+}
+
+function isEntryWithinMatchWindow(entry: BetHistoryEntry) {
   const kickoff = new Date(entry.kickoffAt).getTime();
   const now = Date.now();
-  return kickoff >= now - 3 * 24 * 60 * 60 * 1000 && kickoff <= now + 3 * 24 * 60 * 60 * 1000;
+  const windowMs = MATCH_WINDOW_HOURS * 60 * 60 * 1000;
+  return kickoff >= now - windowMs && kickoff <= now + windowMs;
 }
 
 function openBet(match: Match) {
@@ -460,7 +469,7 @@ function errorText(err: unknown) {
           <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
         </div>
 
-        <p v-if="!visibleBetHistory.length" class="empty-state">No bets in the three-day window yet.</p>
+        <p v-if="!visibleBetHistory.length" class="empty-state">No bets in the 24-hour window yet.</p>
 
         <div class="history-grid">
           <article v-for="entry in visibleBetHistory" :key="entry.predictionId" class="history-card" :class="{ mine: entry.isMine }">
