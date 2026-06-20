@@ -15,8 +15,9 @@ html {
   inline-size: 100%;
   max-inline-size: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
 }
 
 *,
@@ -41,9 +42,9 @@ body {
   max-inline-size: 100%;
   position: relative;
   overflow-x: hidden;
-  touch-action: pan-y;
+  overflow-y: auto;
   overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
 }
 
 #app {
@@ -53,6 +54,7 @@ body {
   max-inline-size: 100%;
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-y: visible;
 }
 
 button,
@@ -149,6 +151,7 @@ select {
   margin: 0 auto;
   padding: 32px 16px 56px;
   overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .auth-shell {
