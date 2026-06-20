@@ -8,11 +8,14 @@ type ViewKey = 'matches' | 'previous' | 'history';
 const MATCH_WINDOW_HOURS = 24;
 const PREVIOUS_MATCH_LIMIT = 20;
 const STARTING_COINS = 1000;
+const SNAPSHOT_CACHE_KEY = 'wc-snapshot-cache-v4';
+const SNAPSHOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [], coinTransfers: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
 const loading = ref(false);
 const loadingAction = ref('');
+const backgroundAction = ref('');
 const booting = ref(Boolean(token.value));
 const message = ref('');
 const connection = ref(apiBaseConfigured ? 'Checking backend...' : 'Set VITE_API_BASE to your Apps Script Web App URL.');
@@ -185,9 +188,12 @@ const viewCards = computed(() => [
   { key: 'history' as const, label: 'Bet history', count: visibleBetHistory.value.length, detail: 'Picks tied to the 24-hour match window' },
 ]);
 onMounted(async () => {
+  const restoredCache = restoreSnapshotCache();
+  if (restoredCache) booting.value = false;
+
   try {
-    await checkBackend();
-    await load();
+    void checkBackend();
+    await load('refresh', { background: restoredCache, quiet: restoredCache });
   } finally {
     booting.value = false;
   }
@@ -199,32 +205,46 @@ async function checkBackend() {
     await pingBackend();
     connection.value = 'Backend connected';
   } catch (err) {
-    connection.value = `Backend not connected: ${errorText(err)}`;
+    if (!data.value.user) connection.value = `Backend not connected: ${errorText(err)}`;
   }
 }
 
-async function load(action = 'refresh') {
+async function load(action = 'refresh', options: { background?: boolean; quiet?: boolean } = {}) {
   if (!apiBaseConfigured) return;
-  loading.value = true;
-  loadingAction.value = action;
-  message.value = '';
+  if (options.background) {
+    backgroundAction.value = action;
+  } else {
+    loading.value = true;
+    loadingAction.value = action;
+  }
+  if (!options.quiet) message.value = '';
   try {
     const nextSnapshot = await snapshot(token.value);
     if (token.value && !nextSnapshot.user) {
       message.value = 'Saved login expired. Please log in again.';
+      clearSavedSession();
       return;
     }
     applySnapshot(nextSnapshot);
+    connection.value = 'Backend connected';
   } catch (err) {
-    message.value = errorText(err);
+    if (options.background && data.value.user) {
+      connection.value = `Showing saved data. Refresh failed: ${errorText(err)}`;
+    } else {
+      message.value = errorText(err);
+    }
   } finally {
-    loading.value = false;
-    loadingAction.value = '';
+    if (options.background) {
+      backgroundAction.value = '';
+    } else {
+      loading.value = false;
+      loadingAction.value = '';
+    }
   }
 }
 
 async function refreshMainPage() {
-  await load('refresh');
+  await load('refresh', { background: Boolean(data.value.user) });
 }
 
 async function submitAuth() {
@@ -345,8 +365,13 @@ async function mutate(payload: Record<string, unknown>, action = 'save') {
 }
 
 function logout() {
+  clearSavedSession();
+}
+
+function clearSavedSession() {
   token.value = '';
   localStorage.removeItem('wc-token');
+  localStorage.removeItem(SNAPSHOT_CACHE_KEY);
   data.value = { ...emptySnapshot };
   selectedMatchId.value = '';
 }
@@ -361,15 +386,61 @@ function seedDrafts() {
   });
 }
 
-function applySnapshot(nextSnapshot: Snapshot) {
-  data.value = nextSnapshot;
+function applySnapshot(nextSnapshot: Snapshot, options: { cache?: boolean } = {}) {
+  data.value = normalizeSnapshot(nextSnapshot);
   if (!data.value.betHistory) data.value.betHistory = [];
   if (!data.value.coinTransfers) data.value.coinTransfers = [];
   seedDrafts();
+  if (options.cache !== false) writeSnapshotCache(data.value);
+}
+
+function normalizeSnapshot(nextSnapshot: Snapshot): Snapshot {
+  return {
+    ...emptySnapshot,
+    ...nextSnapshot,
+    matches: Array.isArray(nextSnapshot.matches) ? nextSnapshot.matches : [],
+    predictions: Array.isArray(nextSnapshot.predictions) ? nextSnapshot.predictions : [],
+    leaderboard: Array.isArray(nextSnapshot.leaderboard) ? nextSnapshot.leaderboard : [],
+    pendingUsers: Array.isArray(nextSnapshot.pendingUsers) ? nextSnapshot.pendingUsers : [],
+    betHistory: Array.isArray(nextSnapshot.betHistory) ? nextSnapshot.betHistory : [],
+    coinTransfers: Array.isArray(nextSnapshot.coinTransfers) ? nextSnapshot.coinTransfers : [],
+  };
+}
+
+function restoreSnapshotCache() {
+  if (!token.value) return false;
+  try {
+    const cached = JSON.parse(localStorage.getItem(SNAPSHOT_CACHE_KEY) || 'null') as { version?: number; token?: string; savedAt?: number; snapshot?: Snapshot } | null;
+    if (!cached || cached.version !== 4 || cached.token !== token.value || !cached.snapshot?.user) return false;
+    if (!cached.savedAt || Date.now() - cached.savedAt > SNAPSHOT_CACHE_MAX_AGE_MS) return false;
+    applySnapshot(cached.snapshot, { cache: false });
+    connection.value = 'Showing saved data while refreshing...';
+    return true;
+  } catch {
+    localStorage.removeItem(SNAPSHOT_CACHE_KEY);
+    return false;
+  }
+}
+
+function writeSnapshotCache(nextSnapshot: Snapshot) {
+  if (!token.value || !nextSnapshot.user) {
+    localStorage.removeItem(SNAPSHOT_CACHE_KEY);
+    return;
+  }
+  try {
+    localStorage.setItem(SNAPSHOT_CACHE_KEY, JSON.stringify({
+      version: 4,
+      token: token.value,
+      savedAt: Date.now(),
+      snapshot: nextSnapshot,
+    }));
+  } catch {
+    localStorage.removeItem(SNAPSHOT_CACHE_KEY);
+  }
 }
 
 function isLoadingAction(action: string) {
-  return loading.value && loadingAction.value === action;
+  return (loading.value && loadingAction.value === action) || backgroundAction.value === action;
 }
 
 function locked(match: Match) {
@@ -527,7 +598,7 @@ function errorText(err: unknown) {
         </div>
         <span>{{ user.displayName }}</span>
         <div class="account-actions">
-          <button type="button" class="ghost-button" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="refreshMainPage">Refresh</button>
+          <button type="button" class="ghost-button" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="isLoadingAction('refresh')" @click="refreshMainPage">Refresh</button>
           <button type="button" class="ghost-button" @click="logout">Log out</button>
         </div>
       </div>
@@ -643,7 +714,7 @@ function errorText(err: unknown) {
       <section v-if="activeView !== 'history'" class="content-section" data-content-start>
         <div class="section-head">
           <h2>{{ viewCards.find((card) => card.key === activeView)?.label }}</h2>
-          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
+          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="isLoadingAction('refresh')" @click="refreshMainPage">Refresh</button>
         </div>
 
         <p v-if="!currentMatches.length" class="empty-state">Nothing here right now.</p>
@@ -679,7 +750,7 @@ function errorText(err: unknown) {
       <section v-else class="content-section" data-content-start>
         <div class="section-head">
           <h2>Bet history</h2>
-          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="loading" @click="load()">Refresh</button>
+          <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('refresh') }" :disabled="isLoadingAction('refresh')" @click="refreshMainPage">Refresh</button>
         </div>
 
         <p v-if="!visibleBetHistory.length" class="empty-state">No bets in the 24-hour window yet.</p>

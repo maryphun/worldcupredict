@@ -118,6 +118,21 @@ function installLiveOddsTrigger() {
   ScriptApp.newTrigger('refreshLiveOddsIfNeeded').timeBased().everyMinutes(1).create();
 }
 
+function installDailyUpcomingOddsTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'refreshOddsNow') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('refreshOddsNow')
+    .timeBased()
+    .atHour(12)
+    .nearMinute(1)
+    .everyDays(1)
+    .create();
+}
+
 function doGet(e) {
   return handle_((e && e.parameter) || {});
 }
