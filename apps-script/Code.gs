@@ -564,12 +564,15 @@ function fetchJsonWithHeaders_(url, errorPrefix) {
 function normalizeOddsApiIoEvents_(payload) {
   var items = Array.isArray(payload) ? payload : (payload && (payload.events || payload.data || payload.results)) || [];
   return items.map(function(event) {
+    var homeTeam = String(event.home || event.homeTeam || event.home_team || event.homeName || '');
+    var awayTeam = String(event.away || event.awayTeam || event.away_team || event.awayName || '');
     return {
       eventId: String(event.id || event.eventId || event.event_id || ''),
-      homeTeam: String(event.home || event.homeTeam || event.home_team || event.homeName || ''),
-      awayTeam: String(event.away || event.awayTeam || event.away_team || event.awayName || ''),
+      homeTeam: homeTeam,
+      awayTeam: awayTeam,
       kickoffAt: String(event.date || event.startTime || event.commence_time || event.kickoffAt || ''),
       status: String(event.status || ''),
+      score: extractOddsApiIoScore_(event, homeTeam, awayTeam),
     };
   }).filter(function(event) {
     return event.eventId && event.homeTeam && event.awayTeam;
@@ -586,12 +589,118 @@ function normalizeOddsApiIoOddsFeed_(payload) {
       homeTeam: homeTeam,
       awayTeam: awayTeam,
       kickoffAt: String(event.date || event.startTime || event.commence_time || event.kickoffAt || ''),
+      score: extractOddsApiIoScore_(event, homeTeam, awayTeam),
       prices: extractOddsApiIoPrices_(event, homeTeam, awayTeam),
       sideOdds: extractOddsApiIoSideOdds_(event, homeTeam, awayTeam),
     };
   }).filter(function(event) {
-    return event.eventId && ((event.prices && (event.prices.home !== '' || event.prices.draw !== '' || event.prices.away !== '')) || (event.sideOdds && event.sideOdds.length));
+    return event.eventId && ((event.prices && (event.prices.home !== '' || event.prices.draw !== '' || event.prices.away !== '')) || (event.sideOdds && event.sideOdds.length) || hasLiveScore_(event.score));
   });
+}
+
+function extractOddsApiIoScore_(event, homeTeam, awayTeam) {
+  var direct = normalizeLiveScorePair_(
+    firstPresent_([
+      event.homeScore,
+      event.home_score,
+      event.scoreHome,
+      event.score_home,
+      event.homeGoals,
+      event.home_goals,
+      event.home && event.home.score,
+      event.homeTeam && event.homeTeam.score,
+      event.teams && event.teams.home && event.teams.home.score,
+    ]),
+    firstPresent_([
+      event.awayScore,
+      event.away_score,
+      event.scoreAway,
+      event.score_away,
+      event.awayGoals,
+      event.away_goals,
+      event.away && event.away.score,
+      event.awayTeam && event.awayTeam.score,
+      event.teams && event.teams.away && event.teams.away.score,
+    ])
+  );
+  if (hasLiveScore_(direct)) return direct;
+
+  var scoreObjects = [event.score, event.scores, event.result, event.results, event.currentScore, event.current_score];
+  for (var i = 0; i < scoreObjects.length; i += 1) {
+    var score = extractLiveScoreFromValue_(scoreObjects[i], homeTeam, awayTeam);
+    if (hasLiveScore_(score)) return score;
+  }
+
+  return { homeScore: '', awayScore: '' };
+}
+
+function extractLiveScoreFromValue_(value, homeTeam, awayTeam) {
+  if (value == null || value === '') return { homeScore: '', awayScore: '' };
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    return parseLiveScoreString_(value);
+  }
+
+  if (Array.isArray(value)) {
+    return extractLiveScoreFromRows_(value, homeTeam, awayTeam);
+  }
+
+  var direct = normalizeLiveScorePair_(
+    firstPresent_([value.home, value.homeScore, value.home_score, value.scoreHome, value.score_home]),
+    firstPresent_([value.away, value.awayScore, value.away_score, value.scoreAway, value.score_away])
+  );
+  if (hasLiveScore_(direct)) return direct;
+
+  return extractLiveScoreFromRows_(value.participants || value.teams || value.rows || [], homeTeam, awayTeam);
+}
+
+function extractLiveScoreFromRows_(rows, homeTeam, awayTeam) {
+  if (!Array.isArray(rows)) return { homeScore: '', awayScore: '' };
+  var home = '';
+  var away = '';
+  rows.forEach(function(row) {
+    var direct = normalizeLiveScorePair_(
+      firstPresent_([row.home, row.homeScore, row.home_score, row.scoreHome, row.score_home]),
+      firstPresent_([row.away, row.awayScore, row.away_score, row.scoreAway, row.score_away])
+    );
+    if (hasLiveScore_(direct)) {
+      home = direct.homeScore;
+      away = direct.awayScore;
+      return;
+    }
+
+    var team = normalizeTeamNameForOdds_(row.name || row.team || row.teamName || row.team_name || row.label || row.side || '');
+    var score = parseLiveScoreValue_(firstPresent_([row.score, row.goals, row.points, row.value]));
+    if (score === '') return;
+    if (team === normalizeTeamNameForOdds_(homeTeam) || team === 'home') home = score;
+    if (team === normalizeTeamNameForOdds_(awayTeam) || team === 'away') away = score;
+  });
+  return normalizeLiveScorePair_(home, away);
+}
+
+function parseLiveScoreString_(value) {
+  var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text) || /t\d{2}:\d{2}/i.test(text)) return { homeScore: '', awayScore: '' };
+  var match = text.match(/^(\d{1,2})\s*[-:]\s*(\d{1,2})$/);
+  if (!match) return { homeScore: '', awayScore: '' };
+  return normalizeLiveScorePair_(match[1], match[2]);
+}
+
+function normalizeLiveScorePair_(homeScore, awayScore) {
+  var home = parseLiveScoreValue_(homeScore);
+  var away = parseLiveScoreValue_(awayScore);
+  if (home === '' || away === '') return { homeScore: '', awayScore: '' };
+  return { homeScore: home, awayScore: away };
+}
+
+function parseLiveScoreValue_(value) {
+  if (value == null || value === '') return '';
+  var n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 99 ? n : '';
+}
+
+function hasLiveScore_(score) {
+  return !!score && score.homeScore !== '' && score.awayScore !== '';
 }
 
 function extractOddsApiIoPrices_(event, homeTeam, awayTeam) {
@@ -722,6 +831,7 @@ function averageOdds_(total) {
 function applyOddsApiIoToLiveMatches_(events, eventMap) {
   var matches = table_(SHEETS.matches);
   var updated = 0;
+  var scoreUpdated = 0;
   var missingOdds = 0;
   var unmatched = [];
   var sideRows = [];
@@ -737,22 +847,35 @@ function applyOddsApiIoToLiveMatches_(events, eventMap) {
 
     var match = matches.rows[index];
     if (!isLiveMatchForOdds_(match)) return;
-    if (match.oddsSource === 'manual') return;
-    sideRows = sideRows.concat(sideOddsRowsForMatch_(match, event.sideOdds || [], 'odds-api.io'));
-    sideMatchIds[String(match.matchId)] = true;
-    if (event.prices.home === '' || event.prices.draw === '' || event.prices.away === '') {
-      missingOdds += 1;
-      return;
+
+    var update = {};
+    if (hasLiveScore_(event.score) && (Number(match.homeScore) !== event.score.homeScore || Number(match.awayScore) !== event.score.awayScore || match.scoreSource !== 'odds-api.io')) {
+      update.homeScore = event.score.homeScore;
+      update.awayScore = event.score.awayScore;
+      update.status = 'live';
+      update.scoreSource = 'odds-api.io';
+      update.manualUpdatedBy = '';
+      scoreUpdated += 1;
     }
 
-    matches.update(index, {
-      oddsHome: event.prices.home,
-      oddsDraw: event.prices.draw,
-      oddsAway: event.prices.away,
-      oddsSource: 'odds-api.io',
-      lastSyncedAt: nowIso_(),
-    });
-    updated += 1;
+    if (match.oddsSource !== 'manual') {
+      sideRows = sideRows.concat(sideOddsRowsForMatch_(match, event.sideOdds || [], 'odds-api.io'));
+      sideMatchIds[String(match.matchId)] = true;
+      if (event.prices.home === '' || event.prices.draw === '' || event.prices.away === '') {
+        missingOdds += 1;
+      } else {
+        update.oddsHome = event.prices.home;
+        update.oddsDraw = event.prices.draw;
+        update.oddsAway = event.prices.away;
+        update.oddsSource = 'odds-api.io';
+        updated += 1;
+      }
+    }
+
+    if (Object.keys(update).length) {
+      update.lastSyncedAt = nowIso_();
+      matches.update(index, update);
+    }
   });
 
   var sideUpdated = upsertSideOddsRows_(sideRows, sideMatchIds);
@@ -760,6 +883,7 @@ function applyOddsApiIoToLiveMatches_(events, eventMap) {
   return {
     events: events.length,
     updated: updated,
+    scoreUpdated: scoreUpdated,
     sideOdds: sideUpdated,
     unmatched: unmatched.slice(0, 8),
     missingOdds: missingOdds,
