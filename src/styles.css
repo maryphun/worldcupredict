@@ -534,6 +534,22 @@ h3 {
   font-size: 1.5rem;
 }
 
+.pick-card small {
+  color: #8b4b5a;
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.pick-card.blocked {
+  cursor: not-allowed;
+  border-color: rgba(195, 39, 70, 0.28);
+  color: #687895;
+  background: linear-gradient(180deg, #f9fbff, #f3f5fa);
+  box-shadow: none;
+  opacity: 0.76;
+}
+
 .pick-card.active {
   border-color: rgba(47, 111, 228, 0.78);
   color: #ffffff;

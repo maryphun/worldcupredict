@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import BetView from './BetView.vue';
-import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type CoinTransferEntry, type Match, type Prediction, type Snapshot, type User } from './api';
+import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type CoinTransferEntry, type Match, type Snapshot, type User } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
@@ -24,7 +24,6 @@ const selectedUserId = ref('');
 const transferAmount = ref('');
 
 const auth = reactive({ username: '', displayName: '', password: '' });
-const draftPredictions = reactive<Record<string, { predictedResult: 'home' | 'draw' | 'away' | ''; tokenAmount: number }>>({});
 const draftScores = reactive<Record<string, { homeScore: number; awayScore: number; status: string }>>({});
 
 const user = computed(() => data.value.user);
@@ -159,13 +158,6 @@ const viewCards = computed(() => [
   { key: 'previous' as const, label: 'Previous matches', count: previousMatches.value.length, detail: 'Newest 20 results' },
   { key: 'history' as const, label: 'Bet history', count: visibleBetHistory.value.length, detail: 'Picks tied to the 24-hour match window' },
 ]);
-const predictionsByMatch = computed(() => {
-  return data.value.predictions.reduce<Record<string, Prediction>>((map, prediction) => {
-    map[prediction.matchId] = prediction;
-    return map;
-  }, {});
-});
-
 onMounted(async () => {
   try {
     await checkBackend();
@@ -232,12 +224,13 @@ async function submitAuth() {
   }
 }
 
-async function savePrediction(match: Match) {
+async function savePrediction(match: Match, predictedResult: 'home' | 'draw' | 'away', tokenAmount: number) {
   await mutate({
     action: 'submitPrediction',
     token: token.value,
     matchId: match.matchId,
-    ...draftPredictions[match.matchId],
+    predictedResult,
+    tokenAmount,
   }, 'bet');
 }
 
@@ -332,11 +325,6 @@ function logout() {
 
 function seedDrafts() {
   data.value.matches.forEach((match) => {
-    const prediction = predictionsByMatch.value[match.matchId];
-    draftPredictions[match.matchId] = {
-      predictedResult: prediction?.predictedResult ?? '',
-      tokenAmount: Number(prediction?.tokenAmount ?? 0),
-    };
     draftScores[match.matchId] = {
       homeScore: Number(match.homeScore || 0),
       awayScore: Number(match.awayScore || 0),
@@ -432,8 +420,7 @@ function transferText(entry: CoinTransferEntry) {
 
 async function savePredictionFromBetView(predictedResult: 'home' | 'draw' | 'away', tokenAmount: number) {
   if (!selectedMatch.value) return;
-  draftPredictions[selectedMatch.value.matchId] = { predictedResult, tokenAmount };
-  await savePrediction(selectedMatch.value);
+  await savePrediction(selectedMatch.value, predictedResult, tokenAmount);
 }
 
 async function reportScoreFromBetView(homeScore: number, awayScore: number, status: string) {
@@ -546,7 +533,6 @@ function errorText(err: unknown) {
         v-if="selectedMatch"
         :match="selectedMatch"
         :entries="selectedMatchEntries"
-        :prediction-draft="draftPredictions[selectedMatch.matchId] || { predictedResult: '', tokenAmount: 0 }"
         :score-draft="draftScores[selectedMatch.matchId] || { homeScore: 0, awayScore: 0, status: 'live' }"
         :token-balance="user.tokenBalance ?? 0"
         :loading="loading"

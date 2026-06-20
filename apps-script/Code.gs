@@ -223,7 +223,7 @@ function snapshot_(token) {
   var matches = matchRows.map(publicMatch_);
   var users = table_(SHEETS.users).rows;
   var auditRows = table_(SHEETS.audit).rows;
-  var allPredictions = latestPredictions_(table_(SHEETS.predictions).rows);
+  var allPredictions = table_(SHEETS.predictions).rows;
   var predictions = user ? allPredictions.filter(function(p) { return p.userId === user.userId; }) : [];
   return {
     user: user ? publicUser_(user, matchRows, allPredictions, auditRows) : null,
@@ -273,21 +273,20 @@ function submitPrediction_(body) {
   var existingPredictions = predictions.rows.filter(function(p) {
     return p.userId === user.userId && p.matchId === match.matchId;
   });
-  var oldStake = existingPredictions.reduce(function(total, prediction) {
-    return total + Number(prediction.tokenAmount || 0);
-  }, 0);
-  var availableForThisBet = tokenBalance_(user, matches, predictions.rows) + oldStake;
+  if (oppositeBetExists_(existingPredictions, predictedResult)) {
+    throw new Error('You already bet on the opposite team for this match. Draw is still available.');
+  }
+
+  var availableForThisBet = tokenBalance_(user, matches, predictions.rows);
   if (tokenAmount > availableForThisBet) throw new Error('Not enough coins for this bet.');
 
   var patch = { homeScore: '', awayScore: '', predictedResult: predictedResult, oddsAtPrediction: oddsAtPrediction, tokenAmount: tokenAmount, updatedAt: nowIso_() };
-  var replacement = Object.assign({
-    predictionId: existingPredictions.length ? existingPredictions[0].predictionId : Utilities.getUuid(),
+  var prediction = Object.assign({
+    predictionId: Utilities.getUuid(),
     userId: user.userId,
     matchId: match.matchId,
   }, patch);
-  replaceRows_(SHEETS.predictions, predictions.rows.filter(function(p) {
-    return !(p.userId === user.userId && p.matchId === match.matchId);
-  }).concat([replacement]));
+  predictions.append(prediction);
   audit_(user.userId, 'submitPrediction', match.matchId, patch);
   return snapshot_(body.token);
 }
@@ -1069,7 +1068,7 @@ function replaceRows_(name, rows) {
 function leaderboard_() {
   var users = table_(SHEETS.users).rows.filter(function(u) { return u.status === 'approved'; });
   var matches = table_(SHEETS.matches).rows;
-  var predictions = latestPredictions_(table_(SHEETS.predictions).rows);
+  var predictions = table_(SHEETS.predictions).rows;
   var auditRows = table_(SHEETS.audit).rows;
   return users.map(function(user) {
     var stats = leaderboardStats_(user, matches, predictions, auditRows);
@@ -1117,7 +1116,7 @@ function leaderboardStats_(user, matches, predictions, auditRows) {
 }
 
 function betHistory_(viewer, matches, predictions, users) {
-  return latestPredictions_(predictions).map(function(prediction) {
+  return predictions.map(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
     var owner = find_(users, function(u) { return u.userId === prediction.userId; });
     if (!match || !owner) return null;
@@ -1188,9 +1187,17 @@ function predictionStatus_(prediction, match) {
   return prediction.predictedResult === resultFromScores_(Number(match.homeScore), Number(match.awayScore)) ? 'won' : 'lost';
 }
 
+function oppositeBetExists_(predictions, predictedResult) {
+  if (predictedResult === 'draw') return false;
+  var opposite = predictedResult === 'home' ? 'away' : 'home';
+  return predictions.some(function(prediction) {
+    return prediction.predictedResult === opposite;
+  });
+}
+
 function tokenBalance_(user, matches, predictions, auditRows) {
   var balance = startingTokens_(user) + transferDelta_(user.userId, auditRows);
-  latestPredictions_(predictions).filter(function(prediction) {
+  predictions.filter(function(prediction) {
     return prediction.userId === user.userId;
   }).forEach(function(prediction) {
     var match = find_(matches, function(m) { return m.matchId === prediction.matchId; });
@@ -1237,19 +1244,6 @@ function startingTokens_(user) {
   var tokens = Number(user.startingTokens);
   if (Number.isFinite(tokens) && tokens > 0) return tokens;
   return user.status === 'approved' ? STARTING_TOKENS : 0;
-}
-
-function latestPredictions_(predictions) {
-  var byUserMatch = {};
-  predictions.forEach(function(prediction) {
-    var key = prediction.userId + '::' + prediction.matchId;
-    if (!byUserMatch[key] || new Date(prediction.updatedAt).getTime() >= new Date(byUserMatch[key].updatedAt).getTime()) {
-      byUserMatch[key] = prediction;
-    }
-  });
-  return Object.keys(byUserMatch).map(function(key) {
-    return byUserMatch[key];
-  });
 }
 
 function ensureStartingTokens_(users, index) {

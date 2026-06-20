@@ -8,7 +8,6 @@ type Pick = 'home' | 'draw' | 'away';
 const props = defineProps<{
   match: Match;
   entries: BetHistoryEntry[];
-  predictionDraft: { predictedResult: Pick | ''; tokenAmount: number };
   scoreDraft: { homeScore: number; awayScore: number; status: string };
   tokenBalance: number;
   loading: boolean;
@@ -32,27 +31,31 @@ const pickOptions = computed(() => [
   { key: 'draw' as const, label: 'Draw', odds: props.match.oddsDraw },
   { key: 'away' as const, label: props.match.awayTeam, odds: props.match.oddsAway },
 ]);
-const sortedEntries = computed(() => [...props.entries].sort((a, b) => Number(b.isMine) - Number(a.isMine) || a.displayName.localeCompare(b.displayName)));
+const sortedEntries = computed(() => [...props.entries].sort((a, b) => (
+  Number(b.isMine) - Number(a.isMine)
+  || new Date(b.updatedAt || b.kickoffAt).getTime() - new Date(a.updatedAt || a.kickoffAt).getTime()
+  || a.displayName.localeCompare(b.displayName)
+)));
+const myActiveEntries = computed(() => props.entries.filter((entry) => entry.isMine && entry.resultStatus === 'pending'));
+const activeStake = computed(() => myActiveEntries.value.reduce((total, entry) => total + Number(entry.tokenAmount || 0), 0));
+const activePickCount = computed(() => myActiveEntries.value.length);
 const tokenAmount = computed(() => Number(tokenInput.value || 0));
-const maxBetTokens = computed(() => Math.max(0, Number(props.tokenBalance || 0) + Number(props.predictionDraft?.tokenAmount || 0)));
+const maxBetTokens = computed(() => Math.max(0, Number(props.tokenBalance || 0)));
 const isOverBalance = computed(() => tokenAmount.value > maxBetTokens.value);
-const existingStake = computed(() => Number(props.predictionDraft?.tokenAmount || 0));
 const selectedOption = computed(() => pickOptions.value.find((option) => option.key === selectedPick.value));
 const selectedOddsMultiplier = computed(() => {
   const odds = Number(selectedOption.value?.odds);
   return Number.isFinite(odds) && odds > 0 ? odds : 2;
 });
 const potentialReturn = computed(() => Math.floor(tokenAmount.value * selectedOddsMultiplier.value));
-const currentPickLabel = computed(() => pickOptions.value.find((option) => option.key === props.predictionDraft?.predictedResult)?.label || '');
-const isChangingPick = computed(() => Boolean(props.predictionDraft?.predictedResult && selectedPick.value && props.predictionDraft.predictedResult !== selectedPick.value));
 
 watch(
-  () => props.predictionDraft,
-  (draft) => {
-    selectedPick.value = draft?.predictedResult ?? '';
-    tokenInput.value = draft?.tokenAmount ? String(draft.tokenAmount) : '';
+  () => props.match.matchId,
+  () => {
+    selectedPick.value = '';
+    tokenInput.value = '';
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 );
 
 watch(
@@ -66,9 +69,15 @@ watch(
 );
 
 function choosePick(pick: Pick) {
-  if (props.locked) return;
+  if (props.locked || isPickBlocked(pick)) return;
   selectedPick.value = pick;
   modalOpen.value = true;
+}
+
+function isPickBlocked(pick: Pick) {
+  if (pick === 'draw') return false;
+  const opposite = pick === 'home' ? 'away' : 'home';
+  return myActiveEntries.value.some((entry) => entry.predictedResult === opposite);
 }
 
 function pressDigit(digit: string) {
@@ -138,7 +147,7 @@ function formatOdds(value: number | string | '') {
     <div class="bet-wallet">
       <small>Your coins</small>
       <strong>{{ tokenBalance }}</strong>
-      <span v-if="existingStake">Current bet: {{ existingStake }} coins</span>
+      <span v-if="activeStake">Active on this match: {{ activeStake }} coins in {{ activePickCount }} {{ activePickCount === 1 ? 'bet' : 'bets' }}</span>
     </div>
 
     <div class="bet-layout" :class="{ 'bet-layout-full': match.status !== 'live' }">
@@ -149,12 +158,13 @@ function formatOdds(value: number | string | '') {
         </div>
 
         <div class="pick-grid">
-          <button v-for="option in pickOptions" :key="option.key" type="button" class="pick-card" :class="{ active: selectedPick === option.key }" :disabled="locked || loading" @click="choosePick(option.key)">
+          <button v-for="option in pickOptions" :key="option.key" type="button" class="pick-card" :class="{ active: selectedPick === option.key, blocked: isPickBlocked(option.key) }" :disabled="locked || loading || isPickBlocked(option.key)" @click="choosePick(option.key)">
             <span>{{ option.label }}</span>
             <strong>{{ formatOdds(option.odds) }}</strong>
+            <small v-if="!locked && isPickBlocked(option.key)">Locked</small>
           </button>
         </div>
-        <p v-if="existingStake" class="bet-note">One active bet only. Confirming another pick replaces your {{ currentPickLabel }} bet.</p>
+        <p v-if="activePickCount" class="bet-note">You can add more bets. The opposite team is locked, but draw stays open.</p>
       </div>
 
       <form v-if="match.status === 'live'" class="score-slip" @submit.prevent="emit('reportScore', score.homeScore, score.awayScore, score.status)">
@@ -231,7 +241,6 @@ function formatOdds(value: number | string | '') {
         </div>
         <p class="token-pick">Pick: <strong>{{ selectedOption?.label }}</strong></p>
         <p class="token-help">Available to bet: <strong>{{ maxBetTokens }}</strong> coins</p>
-        <p v-if="isChangingPick" class="token-warning">This replaces your {{ currentPickLabel }} bet for this match.</p>
         <div class="token-display">{{ tokenInput || '0' }}</div>
         <div class="return-preview">
           <span>If correct</span>
