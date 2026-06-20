@@ -40,7 +40,9 @@ const liveMatches = computed(() => matches.value.filter((match) => match.status 
 const upcomingMatches = computed(() => matches.value.filter((match) => isWithinNextHours(match, MATCH_WINDOW_HOURS) && !locked(match) && match.status === 'scheduled'));
 const mainMatches = computed(() => [...liveMatches.value, ...upcomingMatches.value]);
 const betHistory = computed(() => data.value.betHistory ?? []);
-const visibleBetHistory = computed(() => betHistory.value.filter((entry) => isEntryWithinMatchWindow(entry)));
+const visibleBetHistory = computed(() => betHistory.value
+  .filter((entry) => isEntryWithinMatchWindow(entry))
+  .sort((a, b) => new Date(b.updatedAt || b.kickoffAt).getTime() - new Date(a.updatedAt || a.kickoffAt).getTime()));
 const selectedMatch = computed(() => matches.value.find((match) => match.matchId === selectedMatchId.value));
 const selectedMatchEntries = computed(() => betHistory.value.filter((entry) => entry.matchId === selectedMatchId.value));
 const betCountsByMatch = computed(() => {
@@ -771,21 +773,21 @@ function errorText(err: unknown) {
             v-for="entry in visibleBetHistory"
             :key="entry.predictionId"
             class="history-card profile-trigger"
-            :class="{ mine: entry.isMine }"
+            :class="{ mine: entry.isMine, won: entry.resultStatus === 'won', lost: entry.resultStatus === 'lost' }"
             role="button"
             tabindex="0"
             @click="openUserProfile(entry.userId)"
             @keydown.enter.prevent="openUserProfile(entry.userId)"
             @keydown.space.prevent="openUserProfile(entry.userId)"
           >
-            <div class="history-top">
-              <div class="history-person">
-                <strong>{{ entry.displayName }}</strong>
-                <time v-if="formatKickoff(entry.updatedAt)">Bet {{ formatKickoff(entry.updatedAt) }}</time>
-              </div>
-              <span :class="['status-pill', entry.matchStatus]">{{ statusText(entry.matchStatus) }}</span>
+            <div class="history-person">
+              <strong>{{ entry.displayName }}</strong>
+              <time v-if="formatKickoff(entry.updatedAt)">Bet {{ formatKickoff(entry.updatedAt) }}</time>
             </div>
-            <p>{{ entry.matchLabel }}</p>
+            <div class="history-match">
+              <strong>{{ entry.matchLabel }}</strong>
+              <time>Match {{ formatKickoff(entry.kickoffAt) }}</time>
+            </div>
             <div class="history-stats">
               <span>
                 <small>{{ entry.marketLabel || 'Pick' }}</small>
@@ -804,7 +806,7 @@ function errorText(err: unknown) {
                 <strong>{{ statusText(entry.resultStatus) }}</strong>
               </span>
             </div>
-            <time>Match {{ formatKickoff(entry.kickoffAt) }}</time>
+            <span :class="['status-pill', entry.matchStatus]">{{ statusText(entry.matchStatus) }}</span>
           </article>
         </div>
       </section>

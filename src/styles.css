@@ -1095,11 +1095,16 @@ small {
   scroll-margin-top: 18px;
 }
 
-.match-grid,
-.history-grid {
+.match-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .match-card,
@@ -1318,41 +1323,83 @@ small {
 
 .history-card.mine {
   border-color: #2f6fe4;
-  box-shadow: 0 18px 45px rgba(47, 111, 228, 0.16);
+  box-shadow: 0 10px 28px rgba(47, 111, 228, 0.13);
 }
 
-.history-card p {
-  margin: 0;
-  font-weight: 900;
+.history-card.won {
+  border-color: rgba(10, 143, 77, 0.78);
+  background: linear-gradient(180deg, #ffffff, #f0fff7);
+  box-shadow: 0 10px 28px rgba(10, 143, 77, 0.14);
+}
+
+.history-card.lost {
+  border-color: rgba(195, 39, 70, 0.78);
+  background: linear-gradient(180deg, #ffffff, #fff3f5);
+  box-shadow: 0 10px 28px rgba(195, 39, 70, 0.14);
+}
+
+.history-card.won .history-stats span {
+  background: #ecfff5;
+}
+
+.history-card.lost .history-stats span {
+  background: #fff0f3;
+}
+
+.history-card {
+  display: grid;
+  grid-template-columns: minmax(128px, 0.8fr) minmax(190px, 1fr) minmax(360px, 1.5fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
 }
 
 .history-person {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
-.history-person time {
+.history-person strong,
+.history-match strong {
+  overflow: hidden;
+  color: #061733;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-person time,
+.history-match time {
   color: #5b6f91;
   font-size: 0.82rem;
   font-weight: 800;
 }
 
+.history-match {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .history-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .history-stats span {
   display: grid;
-  gap: 4px;
-  border-radius: 18px;
-  padding: 10px;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 14px;
+  padding: 8px 9px;
   background: #f3f7ff;
 }
 
 .history-stats strong {
   min-width: 0;
+  font-size: 0.92rem;
   overflow-wrap: anywhere;
 }
 
@@ -1834,6 +1881,32 @@ small {
   .profile-columns,
   .transfer-form {
     grid-template-columns: 1fr;
+  }
+
+  .history-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .history-card > .status-pill {
+    justify-self: start;
+  }
+
+  .history-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .history-stats span {
+    min-height: 52px;
+    padding: 7px 6px;
+    font-size: 0.78rem;
+  }
+
+  .history-stats strong {
+    font-size: 0.84rem;
   }
 
   .pick-grid {
