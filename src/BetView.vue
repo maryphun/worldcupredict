@@ -262,13 +262,13 @@ function formatOdds(value: number | string | '') {
           <h2>Coin amount</h2>
           <button type="button" class="ghost-button small-button" @click="modalOpen = false">Close</button>
         </div>
-        <p class="token-pick">Pick: <strong>{{ selectedOption?.outcomeLabel }}</strong></p>
-        <p class="token-help">Available to bet: <strong>{{ maxBetTokens }}</strong> coins</p>
-        <div class="token-display">{{ tokenInput || '0' }}</div>
-        <div class="return-preview">
-          <span>If correct</span>
-          <strong>{{ potentialReturn }} coins</strong>
-          <small>{{ tokenAmount || 0 }} coins x {{ selectedOddsMultiplier.toFixed(2) }} odds</small>
+        <div class="token-meta">
+          <p class="token-pick">Pick: <strong>{{ selectedOption?.outcomeLabel }}</strong></p>
+          <p class="token-help">Available: <strong>{{ maxBetTokens }}</strong> coins</p>
+        </div>
+        <div class="token-display">
+          <strong>{{ tokenInput || '0' }}</strong>
+          <small>Payouts {{ potentialReturn }} coins</small>
         </div>
         <p v-if="isOverBalance" class="token-warning">Not enough coins for this bet.</p>
         <div class="numpad" aria-label="Coin numpad">
