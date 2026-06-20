@@ -2160,3 +2160,43 @@ small {
     min-height: 42px;
   }
 }
+
+@media (min-width: 701px) {
+  .history-card {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(230px, 1.05fr) minmax(0, 3fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 74px;
+    padding: 10px 14px;
+  }
+
+  .history-card > .status-pill {
+    grid-column: auto;
+    grid-row: auto;
+    justify-self: end;
+    min-width: 92px;
+    text-align: center;
+  }
+
+  .history-person,
+  .history-match {
+    align-content: center;
+  }
+
+  .history-stats {
+    grid-column: auto;
+    grid-template-columns: minmax(150px, 1.45fr) minmax(92px, 0.8fr) minmax(92px, 0.8fr) minmax(112px, 0.9fr);
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .history-stats span {
+    min-height: 48px;
+    padding: 7px 10px;
+  }
+
+  .history-stats strong {
+    white-space: normal;
+  }
+}
