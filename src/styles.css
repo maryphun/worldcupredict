@@ -9,13 +9,38 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
+
 * {
   box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  min-width: 0;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
+
+#app {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 button,
@@ -96,6 +121,8 @@ button.is-loading:disabled {
 
 input,
 select {
+  width: 100%;
+  max-width: 100%;
   min-height: 3rem;
   border: 1px solid #c8d6ef;
   border-radius: 16px;
@@ -106,8 +133,10 @@ select {
 
 .shell {
   width: min(1180px, calc(100% - 32px));
+  max-width: calc(100vw - 32px);
   margin: 0 auto;
   padding: 32px 0 56px;
+  overflow-x: clip;
 }
 
 .auth-shell {
@@ -501,7 +530,11 @@ h3 {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 18px;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding: 12px;
   background: rgba(6, 23, 51, 0.62);
   animation: fade-in 180ms ease both;
 }
@@ -509,7 +542,10 @@ h3 {
 .token-modal {
   display: grid;
   gap: 14px;
-  width: min(420px, 100%);
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 28px;
   padding: 18px;
   background: #ffffff;
@@ -672,6 +708,7 @@ label {
 }
 
 .section-head {
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
@@ -1074,7 +1111,11 @@ small {
   z-index: 30;
   display: grid;
   place-items: center;
-  padding: 18px;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding: 12px;
   background: rgba(6, 23, 51, 0.62);
   animation: fade-in 180ms ease both;
 }
@@ -1082,9 +1123,11 @@ small {
 .profile-modal {
   display: grid;
   gap: 16px;
-  width: min(980px, 100%);
-  max-height: min(860px, calc(100vh - 36px));
-  overflow: auto;
+  width: min(980px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(119, 148, 194, 0.34);
   border-radius: 30px;
   padding: 20px;
@@ -1177,7 +1220,9 @@ small {
   display: grid;
   gap: 10px;
   max-height: 320px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .profile-list article {
@@ -1277,8 +1322,9 @@ small {
 
 @media (max-width: 700px) {
   .shell {
-    width: min(100% - 20px, 560px);
-    padding: 18px 0 32px;
+    width: calc(100% - 16px);
+    max-width: calc(100vw - 16px);
+    padding: 12px 0 24px;
   }
 
   .auth-shell {
@@ -1329,6 +1375,28 @@ small {
   .overview-grid {
     display: grid;
     grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .auth-card,
+  .stat-card,
+  .match-card,
+  .history-card,
+  .view-card,
+  .bet-hero,
+  .bet-score,
+  .bet-slip,
+  .score-slip {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .stat-card,
+  .match-card,
+  .history-card,
+  .bet-slip,
+  .score-slip {
+    padding: 14px;
   }
 
   .teams {
@@ -1352,6 +1420,22 @@ small {
 
   .teams span {
     justify-self: start;
+  }
+
+  .teams strong,
+  .bet-score strong,
+  .history-top,
+  .section-head {
+    max-width: 100%;
+  }
+
+  .teams strong,
+  .bet-score strong,
+  .leaderboard-player > span,
+  .history-card p,
+  .profile-list strong,
+  .profile-list span {
+    overflow-wrap: anywhere;
   }
 
   .match-card-header {
@@ -1385,9 +1469,38 @@ small {
     grid-template-columns: 1fr;
   }
 
+  .odds-row {
+    padding: 6px;
+  }
+
+  .odds-row span,
+  .odds-row span:first-child,
+  .odds-row span:last-child {
+    justify-content: space-between;
+    text-align: left;
+  }
+
   .profile-modal {
-    max-height: calc(100vh - 24px);
-    padding: 16px;
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 24px;
+    padding: 14px;
+  }
+
+  .profile-backdrop,
+  .modal-backdrop {
+    padding: 8px;
+  }
+
+  .token-modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 24px;
+    padding: 14px;
+  }
+
+  .profile-graph svg {
+    height: 120px;
   }
 
   .bet-hero {
@@ -1398,7 +1511,8 @@ small {
   .bet-score {
     grid-template-columns: 1fr auto 1fr;
     gap: 8px;
-    padding-inline: 14px;
+    padding: 14px 10px;
+    font-size: 0.98rem;
   }
 
   .bet-score strong:last-child {
@@ -1412,19 +1526,21 @@ small {
     font-size: 1.15rem;
   }
 
-  .odds-row span,
-  .odds-row span:first-child,
-  .odds-row span:last-child {
-    justify-content: space-between;
-    text-align: left;
-  }
-
   .prediction-row label {
     grid-template-columns: 1fr;
   }
 
   .view-card {
     min-height: 118px;
+  }
+
+  .leaderboard li,
+  .non-admin-utility .leaderboard li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .leaderboard li > strong:last-child {
+    grid-column: 2;
   }
 
   .numpad button {
