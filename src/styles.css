@@ -657,6 +657,10 @@ label {
   margin-bottom: 22px;
 }
 
+.non-admin-utility {
+  grid-template-columns: 1fr;
+}
+
 .stat-card {
   padding: 20px;
 }
@@ -688,6 +692,11 @@ label {
   list-style: none;
 }
 
+.non-admin-utility .leaderboard {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
 .leaderboard li,
 .approval {
   display: flex;
@@ -702,6 +711,18 @@ label {
   border-radius: 18px;
   padding: 10px 12px;
   background: #f3f7ff;
+}
+
+.non-admin-utility .leaderboard li {
+  min-height: 78px;
+  border: 1px solid rgba(47, 111, 228, 0.12);
+  padding: 14px;
+  background: linear-gradient(180deg, #f7fbff, #eef5ff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.non-admin-utility .leaderboard li > strong:last-child {
+  font-size: 1.05rem;
 }
 
 .leaderboard-rank {
@@ -1096,6 +1117,10 @@ small {
   .utility-grid,
   .history-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .non-admin-utility {
+    grid-template-columns: 1fr;
   }
 
   .match-grid {

@@ -408,7 +408,7 @@ function errorText(err: unknown) {
         </button>
       </section>
 
-      <section class="utility-grid">
+      <section class="utility-grid" :class="{ 'non-admin-utility': user.role !== 'admin' }">
         <div class="stat-card leaderboard-card">
           <div class="section-head">
             <div>
