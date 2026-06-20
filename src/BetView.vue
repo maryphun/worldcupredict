@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import type { BetHistoryEntry, BetOption, Match } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
@@ -23,6 +23,7 @@ const score = reactive({ homeScore: 0, awayScore: 0, status: 'live' });
 const selectedOptionId = ref('');
 const tokenInput = ref('');
 const modalOpen = ref(false);
+const tokenModal = ref<HTMLElement | null>(null);
 
 const winnerOptions = computed<BetOption[]>(() => [
   { optionId: `${props.match.matchId}:h2h:home`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'home', outcomeLabel: props.match.homeTeam, line: '', odds: props.match.oddsHome },
@@ -81,6 +82,11 @@ function choosePick(option: BetOption) {
   if (props.locked || isPickBlocked(option) || formatOdds(option.odds) === '-') return;
   selectedOptionId.value = option.optionId;
   modalOpen.value = true;
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      tokenModal.value?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    });
+  });
 }
 
 function isPickBlocked(option: BetOption) {
@@ -257,7 +263,7 @@ function formatOdds(value: number | string | '') {
     </div>
 
     <div v-if="modalOpen" class="modal-backdrop" role="dialog" aria-modal="true">
-      <div class="token-modal">
+      <div ref="tokenModal" class="token-modal" tabindex="-1">
         <div class="section-head">
           <h2>Coin amount</h2>
           <button type="button" class="ghost-button small-button" @click="modalOpen = false">Close</button>
