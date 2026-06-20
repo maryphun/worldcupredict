@@ -343,6 +343,8 @@ function isLoadingAction(action: string) {
 }
 
 function locked(match: Match) {
+  if (match.status === 'live') return false;
+  if (['final', 'postponed', 'cancelled'].includes(match.status)) return true;
   return new Date(match.kickoffAt).getTime() <= Date.now();
 }
 

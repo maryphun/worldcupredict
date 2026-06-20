@@ -1,8 +1,11 @@
 var SPREADSHEET_ID = '17hzGtZuyJTzOoEyJUmhsgCoT55sVoT8LVCk1xU1hqHA';
 var FIFA_MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=500&idCompetition=17&idSeason=285023';
-var ODDS_API_HOST = 'https://api.the-odds-api.com';
+var THE_ODDS_API_HOST = 'https://api.the-odds-api.com';
+var ODDS_API_IO_HOST = 'https://api.odds-api.io/v3';
 var ALLOWED_ORIGIN = 'http://localhost:5174';
 var STARTING_TOKENS = 1000;
+var LIVE_ODDS_REFRESH_MS = 60 * 1000;
+var LIVE_ODDS_EVENT_MAP_REFRESH_MS = 10 * 60 * 1000;
 
 var SHEETS = {
   users: 'Users',
@@ -107,6 +110,10 @@ function installSyncTrigger() {
   ScriptApp.newTrigger('syncFifaIfNeeded').timeBased().everyMinutes(5).create();
 }
 
+function installLiveOddsTrigger() {
+  ScriptApp.newTrigger('refreshLiveOddsIfNeeded').timeBased().everyMinutes(1).create();
+}
+
 function doGet(e) {
   return handle_((e && e.parameter) || {});
 }
@@ -142,6 +149,10 @@ function route_(action, body) {
   if (action === 'refreshOdds') {
     requireAdmin_(body.token);
     return refreshOddsNow();
+  }
+  if (action === 'refreshLiveOdds') {
+    requireUser_(body.token);
+    return refreshLiveOddsIfNeeded();
   }
   throw new Error('Unknown action.');
 }
@@ -203,6 +214,7 @@ function login_(body) {
 function snapshot_(token) {
   refreshFifaForSnapshot_();
   var user = token ? authOptional_(token) : null;
+  if (user) refreshLiveOddsForSnapshot_();
   var matchRows = table_(SHEETS.matches).rows;
   var matches = matchRows.map(publicMatch_);
   var users = table_(SHEETS.users).rows;
@@ -228,15 +240,30 @@ function refreshFifaForSnapshot_() {
   }
 }
 
+function refreshLiveOddsForSnapshot_() {
+  try {
+    refreshLiveOddsIfNeeded();
+  } catch (err) {
+    console.warn('Live odds snapshot refresh skipped: ' + String(err && err.message ? err.message : err));
+  }
+}
+
 function submitPrediction_(body) {
   var user = requireUser_(body.token);
   var matches = table_(SHEETS.matches).rows;
   var match = find_(matches, function(m) { return m.matchId === body.matchId; });
   if (!match) throw new Error('Match not found.');
-  if (new Date(match.kickoffAt).getTime() <= Date.now()) throw new Error('Predictions are locked after kickoff.');
+  if (['final', 'postponed', 'cancelled'].indexOf(match.status) >= 0) throw new Error('This match is closed for betting.');
+  if (match.status !== 'live' && new Date(match.kickoffAt).getTime() <= Date.now()) throw new Error('Predictions are locked unless the match is live.');
+  if (match.status === 'live') {
+    refreshLiveOddsIfNeeded();
+    matches = table_(SHEETS.matches).rows;
+    match = find_(matches, function(m) { return m.matchId === body.matchId; });
+  }
   var predictedResult = parsePredictedResult_(body.predictedResult);
   var tokenAmount = parseTokenAmount_(body.tokenAmount);
   var oddsAtPrediction = oddsForResult_(match, predictedResult);
+  if (oddsAtPrediction === '') throw new Error('Odds are not available for this match yet.');
 
   var predictions = table_(SHEETS.predictions);
   var existingPredictions = predictions.rows.filter(function(p) {
@@ -345,9 +372,52 @@ function refreshFifaNow() {
 }
 
 function refreshOddsNow() {
+  return refreshOddsForWindow_(new Date(Date.now() - 3 * 60 * 60 * 1000), new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), {});
+}
+
+function refreshLiveOddsIfNeeded() {
+  var liveMatches = table_(SHEETS.matches).rows.filter(isLiveMatchForOdds_);
+  if (!liveMatches.length) return { skipped: true, reason: 'no live matches' };
+
+  var props = PropertiesService.getScriptProperties();
+  var last = Number(props.getProperty('LAST_LIVE_ODDS_SYNC') || 0);
+  if (Date.now() - last < LIVE_ODDS_REFRESH_MS) return { skipped: true, reason: 'throttled' };
+
+  var result = refreshLiveOddsNow();
+  props.setProperty('LAST_LIVE_ODDS_SYNC', String(Date.now()));
+  return result;
+}
+
+function refreshLiveOddsNow() {
+  var liveMatches = table_(SHEETS.matches).rows.filter(isLiveMatchForOdds_);
+  if (!liveMatches.length) return { skipped: true, reason: 'no live matches' };
+
+  var config = oddsApiIoConfig_();
+  var props = PropertiesService.getScriptProperties();
+  var eventMap = resolveOddsApiIoLiveEventMap_(liveMatches, config, props);
+  var eventIds = liveMatches.map(function(match) {
+    return eventMap[String(match.matchId)];
+  }).filter(function(eventId, index, values) {
+    return eventId && values.indexOf(eventId) === index;
+  });
+
+  if (!eventIds.length) return { skipped: true, reason: 'live events not found on odds-api.io', provider: 'odds-api.io' };
+
+  var response = fetchOddsApiIoOdds_(config, eventIds);
+  var events = normalizeOddsApiIoOddsFeed_(response.payload);
+  var result = applyOddsApiIoToLiveMatches_(events, eventMap);
+  result.provider = 'odds-api.io';
+  result.requestsRemaining = response.headers['x-ratelimit-remaining'] || '';
+  result.requestsLimit = response.headers['x-ratelimit-limit'] || '';
+  result.requestsReset = response.headers['x-ratelimit-reset'] || '';
+  result.requestsLast = '1';
+  return result;
+}
+
+function refreshOddsForWindow_(fromDate, toDate, options) {
   var config = oddsConfig_();
-  var from = oddsApiIso_(new Date(Date.now() - 3 * 60 * 60 * 1000));
-  var to = oddsApiIso_(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000));
+  var from = oddsApiIso_(fromDate);
+  var to = oddsApiIso_(toDate);
   var url = config.host + '/v4/sports/' + encodeURIComponent(config.sportKey) + '/odds/?apiKey=' + encodeURIComponent(config.apiKey) +
     '&regions=' + encodeURIComponent(config.regions) +
     '&markets=h2h&oddsFormat=decimal&dateFormat=iso' +
@@ -367,11 +437,245 @@ function refreshOddsNow() {
 
   var payload = JSON.parse(response.getContentText());
   var events = normalizeOddsFeed_(payload);
-  var result = applyOddsToMatches_(events);
+  var result = applyOddsToMatches_(events, options || {});
   result.requestsRemaining = response.getHeaders()['x-requests-remaining'] || '';
   result.requestsUsed = response.getHeaders()['x-requests-used'] || '';
   result.requestsLast = response.getHeaders()['x-requests-last'] || '';
+  result.liveOnly = !!(options && options.liveOnly);
   return result;
+}
+
+function isLiveMatchForOdds_(match) {
+  return match && match.status === 'live';
+}
+
+function oddsApiIoConfig_() {
+  var apiKey = configValue_('ODDS_API_IO_KEY', '');
+  if (!apiKey) throw new Error('Add ODDS_API_IO_KEY to Script properties first.');
+  return {
+    apiKey: apiKey,
+    host: configValue_('ODDS_API_IO_HOST', ODDS_API_IO_HOST),
+    sport: configValue_('ODDS_API_IO_SPORT', 'football'),
+    bookmakers: configValue_('ODDS_API_IO_BOOKMAKERS', 'Bet365,Unibet'),
+  };
+}
+
+function resolveOddsApiIoLiveEventMap_(liveMatches, config, props) {
+  var currentMap = parsePayload_(props.getProperty('ODDS_API_IO_EVENT_MAP'));
+  var shouldRefresh = Date.now() - Number(props.getProperty('LAST_ODDS_API_IO_EVENT_MAP') || 0) > LIVE_ODDS_EVENT_MAP_REFRESH_MS;
+  var missing = liveMatches.some(function(match) {
+    return !currentMap[String(match.matchId)];
+  });
+
+  if (!missing && !shouldRefresh) return currentMap;
+
+  var response = fetchOddsApiIoLiveEvents_(config);
+  var events = normalizeOddsApiIoEvents_(response.payload);
+  var nextMap = Object.assign({}, currentMap);
+  liveMatches.forEach(function(match) {
+    var index = findOddsApiIoMatchIndex_([match], events);
+    if (index >= 0) nextMap[String(match.matchId)] = String(events[index].eventId);
+  });
+
+  props.setProperty('ODDS_API_IO_EVENT_MAP', JSON.stringify(nextMap));
+  props.setProperty('LAST_ODDS_API_IO_EVENT_MAP', String(Date.now()));
+  return nextMap;
+}
+
+function fetchOddsApiIoLiveEvents_(config) {
+  return fetchJsonWithHeaders_(config.host + '/events/live?apiKey=' + encodeURIComponent(config.apiKey) + '&sport=' + encodeURIComponent(config.sport), 'Odds-API.io live events failed');
+}
+
+function fetchOddsApiIoOdds_(config, eventIds) {
+  return fetchJsonWithHeaders_(config.host + '/odds/multi?apiKey=' + encodeURIComponent(config.apiKey) +
+    '&eventIds=' + encodeURIComponent(eventIds.slice(0, 10).join(',')) +
+    '&bookmakers=' + encodeURIComponent(config.bookmakers), 'Odds-API.io live odds failed');
+}
+
+function fetchJsonWithHeaders_(url, errorPrefix) {
+  var response = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+  if (response.getResponseCode() >= 400) {
+    throw new Error(errorPrefix + ': ' + response.getResponseCode() + ' ' + response.getContentText());
+  }
+  return {
+    payload: JSON.parse(response.getContentText()),
+    headers: lowerCaseHeaders_(response.getHeaders()),
+  };
+}
+
+function normalizeOddsApiIoEvents_(payload) {
+  var items = Array.isArray(payload) ? payload : (payload && (payload.events || payload.data || payload.results)) || [];
+  return items.map(function(event) {
+    return {
+      eventId: String(event.id || event.eventId || event.event_id || ''),
+      homeTeam: String(event.home || event.homeTeam || event.home_team || event.homeName || ''),
+      awayTeam: String(event.away || event.awayTeam || event.away_team || event.awayName || ''),
+      kickoffAt: String(event.date || event.startTime || event.commence_time || event.kickoffAt || ''),
+      status: String(event.status || ''),
+    };
+  }).filter(function(event) {
+    return event.eventId && event.homeTeam && event.awayTeam;
+  });
+}
+
+function normalizeOddsApiIoOddsFeed_(payload) {
+  var items = Array.isArray(payload) ? payload : (payload && (payload.events || payload.data || payload.results)) || [];
+  return items.map(function(event) {
+    var homeTeam = String(event.home || event.homeTeam || event.home_team || event.homeName || '');
+    var awayTeam = String(event.away || event.awayTeam || event.away_team || event.awayName || '');
+    return {
+      eventId: String(event.id || event.eventId || event.event_id || ''),
+      homeTeam: homeTeam,
+      awayTeam: awayTeam,
+      kickoffAt: String(event.date || event.startTime || event.commence_time || event.kickoffAt || ''),
+      prices: extractOddsApiIoPrices_(event, homeTeam, awayTeam),
+    };
+  }).filter(function(event) {
+    return event.eventId && event.prices && (event.prices.home !== '' || event.prices.draw !== '' || event.prices.away !== '');
+  });
+}
+
+function extractOddsApiIoPrices_(event, homeTeam, awayTeam) {
+  var totals = {
+    home: { sum: 0, count: 0 },
+    draw: { sum: 0, count: 0 },
+    away: { sum: 0, count: 0 },
+  };
+  var bookmakers = event.bookmakers || {};
+
+  if (Array.isArray(bookmakers)) {
+    bookmakers.forEach(function(bookmaker) {
+      collectOddsApiIoMarkets_(bookmaker.markets || bookmaker.odds || [], totals, homeTeam, awayTeam);
+    });
+  } else {
+    Object.keys(bookmakers).forEach(function(name) {
+      collectOddsApiIoMarkets_(bookmakers[name], totals, homeTeam, awayTeam);
+    });
+  }
+
+  return {
+    home: averageOdds_(totals.home),
+    draw: averageOdds_(totals.draw),
+    away: averageOdds_(totals.away),
+  };
+}
+
+function collectOddsApiIoMarkets_(markets, totals, homeTeam, awayTeam) {
+  if (!Array.isArray(markets)) return;
+  markets.forEach(function(market) {
+    var marketName = String(market.name || market.key || market.market || '').toLowerCase();
+    if (['ml', 'h2h', 'moneyline', 'match winner', 'match result', '1x2'].indexOf(marketName) < 0) return;
+    (market.odds || market.outcomes || []).forEach(function(row) {
+      if (row.home != null) addOddsTotal_(totals.home, row.home);
+      if (row.draw != null) addOddsTotal_(totals.draw, row.draw);
+      if (row.away != null) addOddsTotal_(totals.away, row.away);
+
+      var name = normalizeTeamNameForOdds_(row.name || row.label || row.outcome || '');
+      if (name && name === normalizeTeamNameForOdds_(homeTeam)) addOddsTotal_(totals.home, row.price || row.odds);
+      if (name && name === normalizeTeamNameForOdds_(awayTeam)) addOddsTotal_(totals.away, row.price || row.odds);
+      if (name && name === 'draw') addOddsTotal_(totals.draw, row.price || row.odds);
+    });
+  });
+}
+
+function addOddsTotal_(total, value) {
+  var price = Number(value);
+  if (!Number.isFinite(price) || price <= 0) return;
+  total.sum += price;
+  total.count += 1;
+}
+
+function averageOdds_(total) {
+  return total.count ? Math.round((total.sum / total.count) * 100) / 100 : '';
+}
+
+function applyOddsApiIoToLiveMatches_(events, eventMap) {
+  var matches = table_(SHEETS.matches);
+  var updated = 0;
+  var missingOdds = 0;
+  var unmatched = [];
+
+  events.forEach(function(event) {
+    var matchId = findMatchIdForOddsApiIoEvent_(eventMap, event.eventId);
+    var index = matchId ? findIndex_(matches.rows, function(match) { return String(match.matchId) === matchId; }) : findOddsApiIoEventMatchIndex_(matches.rows, event);
+    if (index < 0) {
+      unmatched.push(event.homeTeam + ' vs ' + event.awayTeam);
+      return;
+    }
+
+    var match = matches.rows[index];
+    if (!isLiveMatchForOdds_(match)) return;
+    if (match.oddsSource === 'manual') return;
+    if (event.prices.home === '' || event.prices.draw === '' || event.prices.away === '') {
+      missingOdds += 1;
+      return;
+    }
+
+    matches.update(index, {
+      oddsHome: event.prices.home,
+      oddsDraw: event.prices.draw,
+      oddsAway: event.prices.away,
+      oddsSource: 'odds-api.io',
+      lastSyncedAt: nowIso_(),
+    });
+    updated += 1;
+  });
+
+  return {
+    events: events.length,
+    updated: updated,
+    unmatched: unmatched.slice(0, 8),
+    missingOdds: missingOdds,
+  };
+}
+
+function findMatchIdForOddsApiIoEvent_(eventMap, eventId) {
+  eventId = String(eventId);
+  for (var matchId in eventMap) {
+    if (String(eventMap[matchId]) === eventId) return String(matchId);
+  }
+  return '';
+}
+
+function findOddsApiIoMatchIndex_(matches, events) {
+  for (var eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+    var event = events[eventIndex];
+    var eventHome = normalizeTeamNameForOdds_(event.homeTeam);
+    var eventAway = normalizeTeamNameForOdds_(event.awayTeam);
+    var eventKickoff = new Date(event.kickoffAt).getTime();
+    for (var matchIndex = 0; matchIndex < matches.length; matchIndex += 1) {
+      var match = matches[matchIndex];
+      var matchHome = normalizeTeamNameForOdds_(match.homeTeam);
+      var matchAway = normalizeTeamNameForOdds_(match.awayTeam);
+      var samePair = (matchHome === eventHome && matchAway === eventAway) || (matchHome === eventAway && matchAway === eventHome);
+      if (!samePair) continue;
+      if (!Number.isFinite(eventKickoff)) return eventIndex;
+      if (Math.abs(new Date(match.kickoffAt).getTime() - eventKickoff) <= 12 * 60 * 60 * 1000) return eventIndex;
+    }
+  }
+  return -1;
+}
+
+function findOddsApiIoEventMatchIndex_(matches, event) {
+  var eventHome = normalizeTeamNameForOdds_(event.homeTeam);
+  var eventAway = normalizeTeamNameForOdds_(event.awayTeam);
+  var eventKickoff = new Date(event.kickoffAt).getTime();
+  for (var matchIndex = 0; matchIndex < matches.length; matchIndex += 1) {
+    var match = matches[matchIndex];
+    var matchHome = normalizeTeamNameForOdds_(match.homeTeam);
+    var matchAway = normalizeTeamNameForOdds_(match.awayTeam);
+    var samePair = (matchHome === eventHome && matchAway === eventAway) || (matchHome === eventAway && matchAway === eventHome);
+    if (!samePair) continue;
+    if (!Number.isFinite(eventKickoff)) return matchIndex;
+    if (Math.abs(new Date(match.kickoffAt).getTime() - eventKickoff) <= 12 * 60 * 60 * 1000) return matchIndex;
+  }
+  return -1;
 }
 
 function oddsApiIso_(date) {
@@ -383,9 +687,9 @@ function debugOddsSports() {
 }
 
 function listOddsSports_() {
-  var apiKey = configValue_('ODDS_API_KEY', '');
-  if (!apiKey) throw new Error('Add ODDS_API_KEY to the Config sheet first.');
-  var host = configValue_('ODDS_API_HOST', ODDS_API_HOST);
+  var apiKey = configValue_('THE_ODDS_API_KEY', '');
+  if (!apiKey) throw new Error('Add THE_ODDS_API_KEY to Script properties or the Config sheet first.');
+  var host = configValue_('THE_ODDS_API_HOST', THE_ODDS_API_HOST);
   var response = UrlFetchApp.fetch(host + '/v4/sports/?apiKey=' + encodeURIComponent(apiKey) + '&all=true', {
     muteHttpExceptions: true,
     headers: {
@@ -408,13 +712,13 @@ function listOddsSports_() {
 }
 
 function oddsConfig_() {
-  var apiKey = configValue_('ODDS_API_KEY', '');
-  if (!apiKey) throw new Error('Add ODDS_API_KEY to the Config sheet first.');
+  var apiKey = configValue_('THE_ODDS_API_KEY', '');
+  if (!apiKey) throw new Error('Add THE_ODDS_API_KEY to Script properties or the Config sheet first.');
   return {
     apiKey: apiKey,
-    host: configValue_('ODDS_API_HOST', ODDS_API_HOST),
-    sportKey: configValue_('ODDS_SPORT_KEY', 'soccer_fifa_world_cup'),
-    regions: configValue_('ODDS_REGIONS', 'eu'),
+    host: configValue_('THE_ODDS_API_HOST', THE_ODDS_API_HOST),
+    sportKey: configValue_('THE_ODDS_SPORT_KEY', configValue_('ODDS_SPORT_KEY', 'soccer_fifa_world_cup')),
+    regions: configValue_('THE_ODDS_REGIONS', configValue_('ODDS_REGIONS', 'eu')),
   };
 }
 
@@ -454,12 +758,14 @@ function normalizeOddsFeed_(payload) {
   });
 }
 
-function applyOddsToMatches_(events) {
+function applyOddsToMatches_(events, options) {
   var matches = table_(SHEETS.matches);
   var updated = 0;
   var missingOdds = 0;
   var skippedManual = 0;
+  var skippedNotLive = 0;
   var unmatched = [];
+  options = options || {};
 
   events.forEach(function(event) {
     var index = findOddsMatchIndex_(matches.rows, event);
@@ -469,6 +775,11 @@ function applyOddsToMatches_(events) {
     }
 
     var match = matches.rows[index];
+    if (options.allowedMatchIds && !options.allowedMatchIds[String(match.matchId)]) return;
+    if (options.liveOnly && !isLiveMatchForOdds_(match)) {
+      skippedNotLive += 1;
+      return;
+    }
     if (match.oddsSource === 'manual') {
       skippedManual += 1;
       return;
@@ -498,6 +809,7 @@ function applyOddsToMatches_(events) {
     unmatched: unmatched.slice(0, 8),
     missingOdds: missingOdds,
     skippedManual: skippedManual,
+    skippedNotLive: skippedNotLive,
   };
 }
 
@@ -694,7 +1006,7 @@ function mergeExistingMatchSnapshot_(current, candidate) {
     merged.oddsSource = candidate.oddsSource || 'manual';
   }
 
-  if (candidate.oddsSource === 'manual' || candidate.oddsSource === 'odds-api') {
+  if (candidate.oddsSource === 'manual' || candidate.oddsSource === 'odds-api' || candidate.oddsSource === 'odds-api.io') {
     merged.oddsHome = candidate.oddsHome;
     merged.oddsDraw = candidate.oddsDraw;
     merged.oddsAway = candidate.oddsAway;
@@ -1110,11 +1422,22 @@ function json_(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
 }
 
+function lowerCaseHeaders_(headers) {
+  var normalized = {};
+  Object.keys(headers || {}).forEach(function(key) {
+    normalized[String(key).toLowerCase()] = headers[key];
+  });
+  return normalized;
+}
+
 function nowIso_() {
   return new Date().toISOString();
 }
 
 function configValue_(key, fallback) {
+  var propValue = PropertiesService.getScriptProperties().getProperty(key);
+  if (propValue != null && propValue !== '') return String(propValue).trim();
+
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(SHEETS.config);
   if (!sheet) return fallback || '';
