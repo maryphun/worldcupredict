@@ -232,19 +232,16 @@ function formatOdds(value: number | string | '') {
         v-for="entry in sortedEntries"
         :key="entry.predictionId"
         class="history-card profile-trigger"
-        :class="{ mine: entry.isMine }"
+        :class="{ mine: entry.isMine, won: entry.resultStatus === 'won', lost: entry.resultStatus === 'lost', returned: entry.resultStatus === 'void' }"
         role="button"
         tabindex="0"
         @click="emit('openUser', entry.userId)"
         @keydown.enter.prevent="emit('openUser', entry.userId)"
         @keydown.space.prevent="emit('openUser', entry.userId)"
       >
-        <div class="history-top">
-          <div class="history-person">
-            <strong>{{ entry.displayName }}</strong>
-            <time v-if="formatKickoff(entry.updatedAt)">Bet {{ formatKickoff(entry.updatedAt) }}</time>
-          </div>
-          <span v-if="entry.isMine" class="status-pill live">You</span>
+        <div class="history-person">
+          <strong>{{ entry.displayName }}</strong>
+          <time v-if="formatKickoff(entry.updatedAt)">Bet {{ formatKickoff(entry.updatedAt) }}</time>
         </div>
         <div class="history-stats">
           <span>
@@ -264,6 +261,7 @@ function formatOdds(value: number | string | '') {
             <strong>{{ statusText(entry.resultStatus) }}</strong>
           </span>
         </div>
+        <span v-if="entry.isMine" class="status-pill live">You</span>
       </article>
     </div>
 

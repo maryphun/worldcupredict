@@ -1404,12 +1404,22 @@ small {
   box-shadow: 0 10px 28px rgba(195, 39, 70, 0.14);
 }
 
+.history-card.returned {
+  border-color: rgba(91, 111, 145, 0.62);
+  background: linear-gradient(180deg, #ffffff, #f4f7fb);
+  box-shadow: 0 10px 28px rgba(91, 111, 145, 0.12);
+}
+
 .history-card.won .history-stats span {
   background: #ecfff5;
 }
 
 .history-card.lost .history-stats span {
   background: #fff0f3;
+}
+
+.history-card.returned .history-stats span {
+  background: #eef3fa;
 }
 
 .history-card {
@@ -1434,19 +1444,26 @@ small {
 }
 
 .history-card.won > .status-pill,
-.history-card.lost > .status-pill {
+.history-card.lost > .status-pill,
+.history-card.returned > .status-pill {
   color: #ffffff;
   background: #07162f;
 }
 
 .history-card.won > .status-pill::before,
-.history-card.lost > .status-pill::before {
+.history-card.lost > .status-pill::before,
+.history-card.returned > .status-pill::before {
   content: '';
 }
 
 .history-card.won.mine > .status-pill::before,
-.history-card.lost.mine > .status-pill::before {
+.history-card.lost.mine > .status-pill::before,
+.history-card.returned.mine > .status-pill::before {
   content: 'You / ';
+}
+
+.bet-page .history-card {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 3.2fr) auto;
 }
 
 @media (max-width: 980px) {
@@ -1454,14 +1471,27 @@ small {
     grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1fr);
   }
 
+  .bet-page .history-card {
+    grid-template-columns: minmax(130px, 0.75fr) minmax(0, 2.5fr) auto;
+  }
+
   .history-stats {
     grid-column: 1 / -1;
+  }
+
+  .bet-page .history-stats {
+    grid-column: auto;
   }
 
   .history-card > .status-pill {
     grid-column: 2;
     grid-row: 1;
     align-self: start;
+  }
+
+  .bet-page .history-card > .status-pill {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
@@ -2024,15 +2054,28 @@ small {
     padding: 12px;
   }
 
+  .bet-page .history-card {
+    grid-template-columns: 1fr;
+  }
+
   .history-card > .status-pill {
     grid-column: auto;
     grid-row: auto;
     justify-self: start;
   }
 
+  .bet-page .history-card > .status-pill {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .history-stats {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
+  }
+
+  .bet-page .history-stats {
+    grid-column: auto;
   }
 
   .history-stats span {
@@ -2277,5 +2320,13 @@ small {
 
   .history-stats strong {
     white-space: normal;
+  }
+
+  .bet-page .history-card {
+    grid-template-columns: minmax(160px, 0.75fr) minmax(0, 3.6fr) minmax(72px, auto);
+  }
+
+  .bet-page .history-stats {
+    grid-template-columns: minmax(220px, 1.7fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr) minmax(150px, 1fr);
   }
 }
