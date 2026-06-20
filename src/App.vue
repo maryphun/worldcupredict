@@ -10,6 +10,7 @@ const PREVIOUS_MATCH_LIMIT = 20;
 const STARTING_COINS = 1000;
 const SNAPSHOT_CACHE_KEY = 'wc-snapshot-cache-v4';
 const SNAPSHOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const siteBannerUrl = `${import.meta.env.BASE_URL}site-banner.png`;
 
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [], coinTransfers: [] };
 const token = ref(localStorage.getItem('wc-token') || '');
@@ -586,6 +587,10 @@ function errorText(err: unknown) {
 
 <template>
   <main class="shell" :class="{ 'is-busy': loading, 'auth-shell': !user }" :aria-busy="loading">
+    <div class="site-banner" aria-hidden="true">
+      <img :src="siteBannerUrl" alt="" />
+    </div>
+
     <header class="topbar">
       <div>
         <p class="eyebrow">Private pool</p>

@@ -154,6 +154,37 @@ select {
   overflow-y: visible;
 }
 
+.site-banner {
+  position: relative;
+  overflow: hidden;
+  height: clamp(150px, 24vw, 245px);
+  border-radius: 30px;
+  margin: 0 0 22px;
+  background: #061733;
+  box-shadow: 0 22px 52px rgba(7, 22, 47, 0.16);
+  isolation: isolate;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%);
+}
+
+.site-banner::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(6, 23, 51, 0) 45%, rgba(234, 243, 255, 0.94) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.site-banner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 43%;
+  transform: scale(1.04);
+}
+
 .auth-shell {
   display: grid;
   min-height: 100vh;
@@ -161,6 +192,7 @@ select {
 }
 
 .auth-shell .topbar,
+.auth-shell .site-banner,
 .auth-shell .connection-status,
 .auth-shell .loading-bar,
 .auth-shell .notice,
@@ -1570,6 +1602,7 @@ small {
   }
 
   .shell > *,
+  .site-banner,
   .topbar,
   .connection-status,
   .loading-bar,
@@ -1601,6 +1634,16 @@ small {
   .auth-shell {
     min-height: 100vh;
     padding: 18px 8px 32px;
+  }
+
+  .site-banner {
+    height: clamp(120px, 36vw, 170px);
+    border-radius: 24px;
+    margin-bottom: 14px;
+  }
+
+  .site-banner img {
+    object-position: center 45%;
   }
 
   .topbar {
