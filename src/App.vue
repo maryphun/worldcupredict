@@ -591,12 +591,9 @@ function errorText(err: unknown) {
       <img :src="siteBannerUrl" alt="" />
     </div>
 
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Private pool</p>
-        <h1>landugui predict site</h1>
-      </div>
-      <div v-if="user" class="account">
+    <header v-if="user" class="topbar account-strip">
+      <p class="connection-status inline-status">{{ connection }}</p>
+      <div class="account">
         <div class="coin-wallet" aria-label="Available coins">
           <small>Available coins</small>
           <strong>{{ user.tokenBalance ?? 0 }}</strong>
@@ -609,7 +606,7 @@ function errorText(err: unknown) {
       </div>
     </header>
 
-    <p class="connection-status">{{ connection }}</p>
+    <p v-if="!user" class="connection-status">{{ connection }}</p>
     <div v-if="loading" class="loading-bar" aria-hidden="true"><span></span></div>
     <p v-if="message" class="notice">{{ message }}</p>
 
