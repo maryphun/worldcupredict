@@ -6,6 +6,8 @@ var ALLOWED_ORIGIN = 'http://localhost:5174';
 var STARTING_TOKENS = 1000;
 var LIVE_ODDS_REFRESH_MS = 60 * 1000;
 var LIVE_ODDS_EVENT_MAP_REFRESH_MS = 10 * 60 * 1000;
+var SESSION_DAYS = 30;
+var SESSION_TOKEN_LIMIT = 8;
 
 var SHEETS = {
   users: 'Users',
@@ -205,9 +207,11 @@ function login_(body) {
   if (user.status !== 'approved') throw new Error('Account is waiting for approval.');
   user = ensureStartingTokens_(users, index);
 
+  var tokens = sessionTokens_(user.token);
   var token = Utilities.getUuid() + Utilities.getUuid();
-  var expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  users.update(index, { token: token, tokenExpiresAt: expires });
+  var expires = sessionExpiry_();
+  tokens.push(token);
+  users.update(index, { token: serializeSessionTokens_(tokens), tokenExpiresAt: expires });
   return { token: token, user: publicUser_(Object.assign({}, user, { token: token, tokenExpiresAt: expires })) };
 }
 
@@ -1306,12 +1310,49 @@ function requireAdmin_(token) {
 function authOptional_(token) {
   if (!token) return null;
   var users = table_(SHEETS.users);
-  var index = findIndex_(users.rows, function(u) { return u.token === token; });
+  var index = findIndex_(users.rows, function(u) {
+    return sessionTokens_(u.token).indexOf(String(token)) >= 0;
+  });
   if (index < 0) return null;
   var user = users.rows[index];
   if (!user || user.status !== 'approved') return null;
   if (new Date(user.tokenExpiresAt).getTime() < Date.now()) return null;
+  var expires = sessionExpiry_();
+  users.update(index, { tokenExpiresAt: expires });
+  user.tokenExpiresAt = expires;
   return ensureStartingTokens_(users, index);
+}
+
+function sessionExpiry_() {
+  return new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function sessionTokens_(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  var raw = String(value || '').trim();
+  if (!raw) return [];
+  if (raw.charAt(0) === '[') {
+    try {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch (err) {
+      // Fall through to legacy parsing.
+    }
+  }
+  return raw.split('|').map(function(token) { return token.trim(); }).filter(Boolean);
+}
+
+function serializeSessionTokens_(tokens) {
+  var seen = {};
+  var unique = [];
+  tokens.forEach(function(token) {
+    token = String(token || '').trim();
+    if (!token || seen[token]) return;
+    seen[token] = true;
+    unique.push(token);
+  });
+  return JSON.stringify(unique.slice(Math.max(0, unique.length - SESSION_TOKEN_LIMIT)));
 }
 
 function publicUser_(user, matches, predictions, auditRows) {

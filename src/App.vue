@@ -539,13 +539,12 @@ function errorText(err: unknown) {
       />
 
       <template v-else>
-      <section class="overview-grid" aria-label="Main views">
-        <button v-for="card in viewCards" :key="card.key" type="button" class="view-card" :class="{ active: activeView === card.key }" @click="activeView = card.key">
+      <nav class="view-tabs" aria-label="Main views">
+        <button v-for="card in viewCards" :key="card.key" type="button" class="view-tab" :class="{ active: activeView === card.key }" @click="activeView = card.key">
           <span>{{ card.label }}</span>
           <strong>{{ card.count }}</strong>
-              <small>{{ card.detail }}</small>
         </button>
-      </section>
+      </nav>
 
       <section class="utility-grid" :class="{ 'non-admin-utility': user.role !== 'admin' }">
         <div class="stat-card leaderboard-card">
