@@ -265,8 +265,12 @@ async function refreshOdds() {
   loadingAction.value = 'odds';
   message.value = '';
   try {
-    const result = await callApi<{ updated?: number; events?: number; missingOdds?: number; unmatched?: string[]; requestsRemaining?: string; requestsLast?: string }>({ action: 'refreshOdds', token: token.value });
+    const result = await callApi<{ skipped?: boolean; reason?: string; updated?: number; events?: number; missingOdds?: number; unmatched?: string[]; requestsRemaining?: string; requestsLast?: string }>({ action: 'refreshOdds', token: token.value });
     applySnapshot(await snapshot(token.value));
+    if (result.skipped) {
+      message.value = result.reason || 'Manual odds refresh skipped.';
+      return;
+    }
     const unmatchedText = result.unmatched?.length ? ` Unmatched: ${result.unmatched.join(', ')}.` : '';
     const costText = result.requestsLast ? ` Cost: ${result.requestsLast} credit${result.requestsLast === '1' ? '' : 's'}.` : '';
     const remainingText = result.requestsRemaining ? ` Requests left: ${result.requestsRemaining}.` : '';

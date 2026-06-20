@@ -372,6 +372,17 @@ function refreshFifaNow() {
 }
 
 function refreshOddsNow() {
+  if (!configValue_('THE_ODDS_API_KEY', '')) {
+    return {
+      skipped: true,
+      reason: 'Manual upcoming odds refresh needs THE_ODDS_API_KEY. Live odds still use ODDS_API_IO_KEY.',
+      provider: 'the-odds-api.com',
+      events: 0,
+      updated: 0,
+      unmatched: [],
+      missingOdds: 0,
+    };
+  }
   return refreshOddsForWindow_(new Date(Date.now() - 3 * 60 * 60 * 1000), new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), {});
 }
 
