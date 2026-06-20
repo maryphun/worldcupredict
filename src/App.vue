@@ -943,7 +943,7 @@ function errorText(err: unknown) {
             </div>
             <p v-if="!selectedUserBets.length" class="empty-state compact-empty">No bets yet.</p>
             <div v-else class="profile-list">
-              <article v-for="entry in selectedUserBets" :key="entry.predictionId">
+              <article v-for="entry in selectedUserBets" :key="entry.predictionId" :class="{ won: entry.resultStatus === 'won', lost: entry.resultStatus === 'lost', returned: entry.resultStatus === 'void' }">
                 <strong>{{ entry.matchLabel }}</strong>
                 <span>{{ entry.marketLabel || 'Pick' }} · {{ entry.token }} · {{ entry.tokenAmount }} coins · {{ formatOdds(entry.oddsAtPrediction) }} odds</span>
                 <small>{{ statusText(entry.resultStatus) }} · {{ formatKickoff(entry.updatedAt || entry.kickoffAt) }}</small>

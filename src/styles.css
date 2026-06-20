@@ -1714,6 +1714,24 @@ small {
   padding: 12px;
 }
 
+.profile-list article.won {
+  border-color: rgba(10, 143, 77, 0.78);
+  background: linear-gradient(180deg, #ffffff, #f0fff7);
+  box-shadow: 0 10px 24px rgba(10, 143, 77, 0.1);
+}
+
+.profile-list article.lost {
+  border-color: rgba(195, 39, 70, 0.78);
+  background: linear-gradient(180deg, #ffffff, #fff3f5);
+  box-shadow: 0 10px 24px rgba(195, 39, 70, 0.1);
+}
+
+.profile-list article.returned {
+  border-color: rgba(91, 111, 145, 0.62);
+  background: linear-gradient(180deg, #ffffff, #f4f7fb);
+  box-shadow: 0 10px 24px rgba(91, 111, 145, 0.09);
+}
+
 .profile-list span {
   color: #4f6690;
   font-size: 0.9rem;
