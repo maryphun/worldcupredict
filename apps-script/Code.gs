@@ -980,7 +980,7 @@ function mergeExistingMatch_(incoming, existing) {
   if (!existing) return incoming;
   var match = Object.assign({}, incoming);
 
-  if (existing.scoreSource === 'manual' && incoming.status !== 'final') {
+  if (existing.scoreSource === 'manual' && incoming.status !== 'final' && !hasMatchScore_(incoming)) {
     match.status = existing.status || incoming.status;
     match.homeScore = existing.homeScore;
     match.awayScore = existing.awayScore;
@@ -1002,12 +1002,20 @@ function mergeExistingMatchSnapshot_(current, candidate) {
   if (!current) return Object.assign({}, candidate);
   var merged = Object.assign({}, current);
 
-  if (candidate.scoreSource === 'manual') {
+  if (candidate.scoreSource === 'manual' && !hasMatchScore_(merged)) {
     merged.status = candidate.status || merged.status;
     merged.homeScore = candidate.homeScore;
     merged.awayScore = candidate.awayScore;
     merged.scoreSource = 'manual';
     merged.manualUpdatedBy = candidate.manualUpdatedBy;
+  }
+
+  if (candidate.scoreSource === 'fifa' && hasMatchScore_(candidate)) {
+    merged.status = candidate.status || merged.status;
+    merged.homeScore = candidate.homeScore;
+    merged.awayScore = candidate.awayScore;
+    merged.scoreSource = 'fifa';
+    merged.manualUpdatedBy = '';
   }
 
   if (!hasMatchOdds_(merged) && hasMatchOdds_(candidate)) {
@@ -1029,6 +1037,10 @@ function mergeExistingMatchSnapshot_(current, candidate) {
 
 function hasMatchOdds_(match) {
   return !!match && (match.oddsHome !== '' || match.oddsDraw !== '' || match.oddsAway !== '');
+}
+
+function hasMatchScore_(match) {
+  return !!match && match.homeScore !== '' && match.awayScore !== '';
 }
 
 function replaceRows_(name, rows) {
