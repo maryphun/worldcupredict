@@ -48,13 +48,26 @@ const waitingCoinsByUser = computed(() => {
     return map;
   }, {});
 });
+const settledRecordByUser = computed(() => {
+  return betHistory.value.reduce<Record<string, { wins: number; losses: number }>>((map, entry) => {
+    if (!map[entry.userId]) map[entry.userId] = { wins: 0, losses: 0 };
+    if (entry.resultStatus === 'won') map[entry.userId].wins += 1;
+    if (entry.resultStatus === 'lost') map[entry.userId].losses += 1;
+    return map;
+  }, {});
+});
 const displayLeaderboard = computed(() => {
   return data.value.leaderboard
-    .map((entry) => ({
-      ...entry,
-      displayTotal: leaderboardCoins(entry),
-    }))
-    .sort((a, b) => b.displayTotal - a.displayTotal || (b.wins ?? 0) - (a.wins ?? 0) || (a.losses ?? 0) - (b.losses ?? 0) || a.displayName.localeCompare(b.displayName));
+    .map((entry) => {
+      const record = settledRecordByUser.value[entry.userId] ?? { wins: 0, losses: 0 };
+      return {
+        ...entry,
+        displayTotal: leaderboardCoins(entry),
+        displayWins: Math.max(Number(entry.wins ?? 0), record.wins),
+        displayLosses: Math.max(Number(entry.losses ?? 0), record.losses),
+      };
+    })
+    .sort((a, b) => b.displayTotal - a.displayTotal || b.displayWins - a.displayWins || a.displayLosses - b.displayLosses || a.displayName.localeCompare(b.displayName));
 });
 const currentMatches = computed(() => {
   if (activeView.value === 'matches') return mainMatches.value;
@@ -421,7 +434,7 @@ function errorText(err: unknown) {
               <strong class="leaderboard-rank">{{ index + 1 }}</strong>
               <span class="leaderboard-player">
                 <span>{{ entry.displayName }}</span>
-                <small>{{ entry.wins ?? 0 }}W / {{ entry.losses ?? 0 }}L</small>
+                <small>{{ entry.displayWins }}W / {{ entry.displayLosses }}L</small>
               </span>
               <strong>{{ entry.displayTotal }} coins</strong>
             </li>
