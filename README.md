@@ -1,4 +1,4 @@
-# Private World Cup Predictions
+# landugui predict site
 
 A friend-group FIFA World Cup prediction app using:
 

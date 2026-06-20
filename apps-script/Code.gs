@@ -148,7 +148,7 @@ function route_(action, body) {
 
 function ping_() {
   return {
-    app: 'private-world-cup-predictions',
+    app: 'landugui-predict-site',
     status: 'ok',
     time: nowIso_(),
   };

@@ -455,7 +455,7 @@ function errorText(err: unknown) {
     <header class="topbar">
       <div>
         <p class="eyebrow">Private pool</p>
-        <h1>World Cup Predictions</h1>
+        <h1>landugui predict site</h1>
       </div>
       <div v-if="user" class="account">
         <div class="coin-wallet" aria-label="Available coins">
