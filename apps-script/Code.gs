@@ -200,6 +200,7 @@ function login_(body) {
 }
 
 function snapshot_(token) {
+  refreshFifaForSnapshot_();
   var user = token ? authOptional_(token) : null;
   var matchRows = table_(SHEETS.matches).rows;
   var matches = matchRows.map(publicMatch_);
@@ -214,6 +215,14 @@ function snapshot_(token) {
     pendingUsers: user && user.role === 'admin' ? users.filter(function(u) { return u.status === 'pending'; }).map(function(u) { return publicUser_(u); }) : [],
     betHistory: user ? betHistory_(user, matchRows, allPredictions, users) : [],
   };
+}
+
+function refreshFifaForSnapshot_() {
+  try {
+    syncFifaIfNeeded();
+  } catch (err) {
+    console.warn('FIFA snapshot refresh skipped: ' + String(err && err.message ? err.message : err));
+  }
 }
 
 function submitPrediction_(body) {
@@ -632,11 +641,11 @@ function mergeExistingMatch_(incoming, existing) {
 
   var incomingHasOdds = incoming.oddsHome !== '' || incoming.oddsDraw !== '' || incoming.oddsAway !== '';
   var existingHasOdds = existing.oddsHome !== '' || existing.oddsDraw !== '' || existing.oddsAway !== '';
-  if (existing.oddsSource === 'manual' || (!incomingHasOdds && existingHasOdds)) {
+  if (existingHasOdds) {
     match.oddsHome = existing.oddsHome;
     match.oddsDraw = existing.oddsDraw;
     match.oddsAway = existing.oddsAway;
-    match.oddsSource = existing.oddsSource || incoming.oddsSource;
+    match.oddsSource = existing.oddsSource || 'manual';
   }
 
   return match;
