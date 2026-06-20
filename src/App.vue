@@ -105,6 +105,7 @@ const displayLeaderboard = computed(() => {
     })
     .sort((a, b) => b.displayTotal - a.displayTotal || b.displayWins - a.displayWins || a.displayLosses - b.displayLosses || a.displayName.localeCompare(b.displayName));
 });
+const visibleLeaderboard = computed(() => displayLeaderboard.value.slice(0, 12));
 const selectedUserProfile = computed(() => {
   if (!selectedUserId.value) return null;
   return displayLeaderboard.value.find((entry) => entry.userId === selectedUserId.value)
@@ -749,7 +750,7 @@ function errorText(err: unknown) {
           </div>
           <ol class="leaderboard">
             <li
-              v-for="(entry, index) in displayLeaderboard"
+              v-for="(entry, index) in visibleLeaderboard"
               :key="entry.userId"
               class="profile-trigger"
               role="button"
@@ -770,26 +771,10 @@ function errorText(err: unknown) {
               <strong>{{ entry.displayTotal }} coins</strong>
             </li>
           </ol>
-          <p class="leaderboard-disclaimer">Leaderboard ranking starts after a player has at least 1 finished bet. Active bets do not count yet.</p>
-        </div>
-
-        <div v-if="user.role === 'admin'" class="stat-card admin-card">
-          <div class="section-head">
-            <h2>Admin</h2>
-            <div class="admin-actions">
-              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('requests') }" :disabled="loading" @click="refreshAccessRequests">Refresh requests</button>
-              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('fifa') }" :disabled="loading" @click="refreshFifa">Refresh FIFA</button>
-              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('odds') }" :disabled="loading" @click="refreshOdds">Refresh odds</button>
-            </div>
-          </div>
-          <p v-if="!data.pendingUsers.length" class="muted">No pending users.</p>
-          <div v-for="pendingUser in data.pendingUsers" :key="pendingUser.userId" class="approval">
-            <span>{{ pendingUser.displayName }} <small>@{{ pendingUser.username }}</small></span>
-            <div>
-              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('approve') }" :disabled="loading" @click="approve(pendingUser, true)">Approve</button>
-              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('reject') }" :disabled="loading" @click="approve(pendingUser, false)">Reject</button>
-            </div>
-          </div>
+          <p class="leaderboard-disclaimer">
+            Leaderboard ranking starts after a player has at least 1 finished bet. Active bets do not count yet.
+            <span v-if="displayLeaderboard.length > visibleLeaderboard.length">Showing top {{ visibleLeaderboard.length }}.</span>
+          </p>
         </div>
       </section>
 
@@ -877,6 +862,27 @@ function errorText(err: unknown) {
             </div>
             <span :class="['status-pill', entry.matchStatus]">{{ statusText(entry.matchStatus) }}</span>
           </article>
+        </div>
+      </section>
+
+      <section v-if="user.role === 'admin'" class="admin-space">
+        <div class="stat-card admin-card">
+          <div class="section-head">
+            <h2>Admin</h2>
+            <div class="admin-actions">
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('requests') }" :disabled="loading" @click="refreshAccessRequests">Refresh requests</button>
+              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('fifa') }" :disabled="loading" @click="refreshFifa">Refresh FIFA</button>
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('odds') }" :disabled="loading" @click="refreshOdds">Refresh odds</button>
+            </div>
+          </div>
+          <p v-if="!data.pendingUsers.length" class="muted">No pending users.</p>
+          <div v-for="pendingUser in data.pendingUsers" :key="pendingUser.userId" class="approval">
+            <span>{{ pendingUser.displayName }} <small>@{{ pendingUser.username }}</small></span>
+            <div>
+              <button type="button" class="small-button" :class="{ 'is-loading': isLoadingAction('approve') }" :disabled="loading" @click="approve(pendingUser, true)">Approve</button>
+              <button type="button" class="small-button secondary" :class="{ 'is-loading': isLoadingAction('reject') }" :disabled="loading" @click="approve(pendingUser, false)">Reject</button>
+            </div>
+          </div>
         </div>
       </section>
       </template>

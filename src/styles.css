@@ -948,10 +948,10 @@ label {
 
 .utility-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(280px, 1.1fr);
+  grid-template-columns: 1fr;
   align-items: start;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .non-admin-utility {
@@ -1010,15 +1010,13 @@ label {
 
 .leaderboard {
   display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-auto-flow: column;
+  grid-template-rows: repeat(6, auto);
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.non-admin-utility .leaderboard {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
 }
 
 .leaderboard li,
@@ -1033,19 +1031,14 @@ label {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   border-radius: 16px;
-  padding: 8px 10px;
-  background: #f3f7ff;
-}
-
-.non-admin-utility .leaderboard li {
-  min-height: 78px;
+  min-height: 70px;
   border: 1px solid rgba(47, 111, 228, 0.12);
-  padding: 14px;
+  padding: 12px;
   background: linear-gradient(180deg, #f7fbff, #eef5ff);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.non-admin-utility .leaderboard li > strong:last-child {
+.leaderboard li > strong:last-child {
   font-size: 1.05rem;
 }
 
@@ -1140,6 +1133,10 @@ label {
 
 .admin-card {
   align-self: start;
+}
+
+.admin-space {
+  margin: 18px 0 0;
 }
 
 .admin-card .section-head {
@@ -1790,6 +1787,7 @@ small {
 .auth-card,
 .view-tabs,
 .utility-grid,
+.admin-space,
 .content-section,
 .bet-page {
   animation: rise-in 260ms ease both;
@@ -1806,14 +1804,6 @@ small {
 }
 
 @media (max-width: 980px) {
-  .utility-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .non-admin-utility {
-    grid-template-columns: 1fr;
-  }
-
   .match-grid {
     grid-template-columns: 1fr;
   }
@@ -2282,8 +2272,11 @@ small {
     gap: 7px;
   }
 
+  .leaderboard,
   .non-admin-utility .leaderboard {
     grid-template-columns: 1fr;
+    grid-auto-flow: row;
+    grid-template-rows: none;
   }
 
   .leaderboard li > strong:last-child {
