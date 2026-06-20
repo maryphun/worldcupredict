@@ -927,6 +927,15 @@ label {
   font-weight: 850;
 }
 
+.leaderboard-disclaimer {
+  margin: 12px 4px 0;
+  color: #5b6f91;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .small-button {
   min-height: 2.35rem;
   padding: 0 0.9rem;

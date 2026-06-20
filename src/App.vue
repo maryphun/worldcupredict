@@ -73,8 +73,16 @@ const settledRecordByUser = computed(() => {
     return map;
   }, {});
 });
+const finishedBetsByUser = computed(() => {
+  return betHistory.value.reduce<Record<string, number>>((map, entry) => {
+    if (entry.resultStatus === 'pending') return map;
+    map[entry.userId] = (map[entry.userId] ?? 0) + 1;
+    return map;
+  }, {});
+});
 const displayLeaderboard = computed(() => {
   return data.value.leaderboard
+    .filter((entry) => (finishedBetsByUser.value[entry.userId] ?? 0) >= 2)
     .map((entry) => {
       const record = settledRecordByUser.value[entry.userId] ?? { wins: 0, losses: 0 };
       return {
@@ -691,6 +699,7 @@ function errorText(err: unknown) {
               <strong>{{ entry.displayTotal }} coins</strong>
             </li>
           </ol>
+          <p class="leaderboard-disclaimer">Leaderboard ranking starts after a player has at least 2 finished bets. Active bets do not count yet.</p>
         </div>
 
         <div v-if="user.role === 'admin'" class="stat-card admin-card">
