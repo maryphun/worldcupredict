@@ -1569,11 +1569,32 @@ small {
   .bet-layout,
   .bet-inputs,
   .bet-inputs.compact,
-  .pick-grid,
   .profile-summary,
   .profile-columns,
   .transfer-form {
     grid-template-columns: 1fr;
+  }
+
+  .pick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pick-card {
+    min-height: 96px;
+    gap: 6px;
+    border-radius: 18px;
+    padding: 10px 6px;
+  }
+
+  .pick-card span {
+    font-size: 0.82rem;
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  .pick-card strong {
+    font-size: 1.2rem;
   }
 
   .odds-row {
