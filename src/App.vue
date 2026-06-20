@@ -5,11 +5,18 @@ import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
+type SettledBetNotification = {
+  id: string;
+  resultStatus: 'won' | 'lost';
+  title: string;
+  detail: string;
+};
 const MATCH_WINDOW_HOURS = 24;
 const PREVIOUS_MATCH_LIMIT = 20;
 const STARTING_COINS = 1000;
 const SNAPSHOT_CACHE_KEY = 'wc-snapshot-cache-v4';
 const SNAPSHOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const BET_NOTICE_KEY_PREFIX = 'wc-seen-settled-bets-v1';
 const siteBannerUrl = `${import.meta.env.BASE_URL}site-banner.png`;
 
 const emptySnapshot: Snapshot = { user: null, matches: [], predictions: [], leaderboard: [], pendingUsers: [], betHistory: [], coinTransfers: [] };
@@ -26,6 +33,7 @@ const activeView = ref<ViewKey>('matches');
 const selectedMatchId = ref('');
 const selectedUserId = ref('');
 const transferAmount = ref('');
+const settledBetNotifications = ref<SettledBetNotification[]>([]);
 
 const auth = reactive({ username: '', displayName: '', password: '' });
 const draftScores = reactive<Record<string, { homeScore: number; awayScore: number; status: string }>>({});
@@ -397,12 +405,64 @@ function seedDrafts() {
   });
 }
 
-function applySnapshot(nextSnapshot: Snapshot, options: { cache?: boolean } = {}) {
+function applySnapshot(nextSnapshot: Snapshot, options: { cache?: boolean; notify?: boolean } = {}) {
   data.value = normalizeSnapshot(nextSnapshot);
   if (!data.value.betHistory) data.value.betHistory = [];
   if (!data.value.coinTransfers) data.value.coinTransfers = [];
   seedDrafts();
+  if (options.notify !== false) queueSettledBetNotifications(data.value);
   if (options.cache !== false) writeSnapshotCache(data.value);
+}
+
+function queueSettledBetNotifications(nextSnapshot: Snapshot) {
+  if (!nextSnapshot.user) return;
+  const seen = readSeenBetNotices(nextSnapshot.user.userId);
+  const fresh = (nextSnapshot.betHistory ?? [])
+    .filter((entry) => entry.isMine && (entry.resultStatus === 'won' || entry.resultStatus === 'lost') && !seen.has(entry.predictionId))
+    .sort((a, b) => new Date(b.updatedAt || b.kickoffAt).getTime() - new Date(a.updatedAt || a.kickoffAt).getTime());
+  if (!fresh.length) return;
+
+  fresh.forEach((entry) => seen.add(entry.predictionId));
+  writeSeenBetNotices(nextSnapshot.user.userId, seen);
+
+  settledBetNotifications.value = [
+    ...fresh.slice(0, 5).map(settledBetNotificationFromEntry),
+    ...settledBetNotifications.value,
+  ].slice(0, 5);
+}
+
+function settledBetNotificationFromEntry(entry: BetHistoryEntry): SettledBetNotification {
+  const won = entry.resultStatus === 'won';
+  const payout = Math.max(0, Math.floor(Number(entry.points || 0)));
+  const stake = Math.max(0, Math.floor(Number(entry.tokenAmount || 0)));
+  return {
+    id: entry.predictionId,
+    resultStatus: won ? 'won' : 'lost',
+    title: won ? `Bet won: +${Math.max(0, payout - stake)} coins` : `Bet lost: -${stake} coins`,
+    detail: `${entry.matchLabel} • ${entry.token} • ${won ? `${payout} coins payout` : `${stake} coins stake`}`,
+  };
+}
+
+function dismissBetNotification(id: string) {
+  settledBetNotifications.value = settledBetNotifications.value.filter((item) => item.id !== id);
+}
+
+function betNoticeStorageKey(userId: string) {
+  return `${BET_NOTICE_KEY_PREFIX}:${userId}`;
+}
+
+function readSeenBetNotices(userId: string) {
+  try {
+    const ids = JSON.parse(localStorage.getItem(betNoticeStorageKey(userId)) || '[]');
+    return new Set<string>(Array.isArray(ids) ? ids.map(String) : []);
+  } catch {
+    localStorage.removeItem(betNoticeStorageKey(userId));
+    return new Set<string>();
+  }
+}
+
+function writeSeenBetNotices(userId: string, ids: Set<string>) {
+  localStorage.setItem(betNoticeStorageKey(userId), JSON.stringify([...ids].slice(-500)));
 }
 
 function normalizeSnapshot(nextSnapshot: Snapshot): Snapshot {
@@ -424,7 +484,7 @@ function restoreSnapshotCache() {
     const cached = JSON.parse(localStorage.getItem(SNAPSHOT_CACHE_KEY) || 'null') as { version?: number; token?: string; savedAt?: number; snapshot?: Snapshot } | null;
     if (!cached || cached.version !== 4 || cached.token !== token.value || !cached.snapshot?.user) return false;
     if (!cached.savedAt || Date.now() - cached.savedAt > SNAPSHOT_CACHE_MAX_AGE_MS) return false;
-    applySnapshot(cached.snapshot, { cache: false });
+    applySnapshot(cached.snapshot, { cache: false, notify: false });
     connection.value = 'Showing saved data while refreshing...';
     return true;
   } catch {
@@ -619,6 +679,15 @@ function errorText(err: unknown) {
     <p v-if="!user" class="connection-status">{{ connection }}</p>
     <div v-if="loading" class="loading-bar" aria-hidden="true"><span></span></div>
     <p v-if="message" class="notice">{{ message }}</p>
+    <div v-if="settledBetNotifications.length" class="bet-notification-stack" aria-live="polite" aria-label="Bet result notifications">
+      <article v-for="item in settledBetNotifications" :key="item.id" class="bet-notification" :class="item.resultStatus">
+        <div>
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.detail }}</span>
+        </div>
+        <button type="button" class="notification-close" aria-label="Dismiss notification" @click="dismissBetNotification(item.id)">Close</button>
+      </article>
+    </div>
 
     <section v-if="!user && booting" class="auth-card session-card">
       <h2>Loading your page...</h2>

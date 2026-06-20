@@ -334,6 +334,67 @@ h3 {
   background: #fff4f6;
 }
 
+.bet-notification-stack {
+  position: sticky;
+  top: 10px;
+  z-index: 18;
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.bet-notification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid rgba(47, 111, 228, 0.2);
+  border-radius: 20px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 36px rgba(7, 22, 47, 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.bet-notification.won {
+  border-color: rgba(10, 143, 77, 0.52);
+  background: linear-gradient(180deg, #ffffff, #effff7);
+}
+
+.bet-notification.lost {
+  border-color: rgba(195, 39, 70, 0.52);
+  background: linear-gradient(180deg, #ffffff, #fff2f5);
+}
+
+.bet-notification div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.bet-notification strong {
+  color: #061733;
+  font-size: 1rem;
+}
+
+.bet-notification span {
+  color: #4f6690;
+  font-size: 0.86rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.notification-close {
+  min-height: 2.25rem;
+  border-color: rgba(91, 111, 145, 0.28);
+  border-radius: 999px;
+  padding: 0 0.85rem;
+  color: #0b234a;
+  background: #f7fbff;
+  box-shadow: none;
+  font-size: 0.82rem;
+}
+
 .connection-status {
   margin: 0 0 18px;
   color: #4c6388;
@@ -1733,6 +1794,7 @@ small {
   .connection-status,
   .loading-bar,
   .notice,
+  .bet-notification-stack,
   .auth-card,
   .account,
   .utility-grid,
@@ -1760,6 +1822,23 @@ small {
   .auth-shell {
     min-height: 100vh;
     padding: 18px 8px 32px;
+  }
+
+  .bet-notification-stack {
+    top: 8px;
+    margin-bottom: 12px;
+  }
+
+  .bet-notification {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    border-radius: 18px;
+    padding: 11px;
+  }
+
+  .notification-close {
+    justify-self: start;
+    min-height: 2rem;
   }
 
   .site-banner {
