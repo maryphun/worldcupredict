@@ -25,8 +25,22 @@ export type Match = {
   oddsHome: number | string | '';
   oddsDraw: number | string | '';
   oddsAway: number | string | '';
+  sideOdds?: BetOption[];
   scoreSource: string;
   oddsSource: string;
+};
+
+export type BetMarketType = 'h2h' | 'total' | 'handicap' | 'correct_score';
+
+export type BetOption = {
+  optionId: string;
+  marketType: BetMarketType;
+  marketLabel: string;
+  outcomeKey: string;
+  outcomeLabel: string;
+  line: number | string | '';
+  odds: number | string | '';
+  source?: string;
 };
 
 export type Prediction = {
@@ -35,7 +49,11 @@ export type Prediction = {
   matchId: string;
   homeScore: number | '';
   awayScore: number | '';
-  predictedResult: 'home' | 'draw' | 'away';
+  predictedResult: string;
+  marketType?: BetMarketType;
+  marketLabel?: string;
+  outcomeLabel?: string;
+  line?: number | string | '';
   oddsAtPrediction: number | string | '';
   tokenAmount: number;
   updatedAt: string;
@@ -53,12 +71,16 @@ export type BetHistoryEntry = {
   awayTeam: string;
   predictedHomeScore: number;
   predictedAwayScore: number;
-  predictedResult: 'home' | 'draw' | 'away';
+  predictedResult: string;
+  marketType?: BetMarketType;
+  marketLabel?: string;
+  outcomeLabel?: string;
+  line?: number | string | '';
   token: string;
   tokenAmount: number;
   oddsAtPrediction: number | string | '';
   points: number;
-  resultStatus: 'pending' | 'won' | 'lost';
+  resultStatus: 'pending' | 'won' | 'lost' | 'void';
   isMine: boolean;
   updatedAt: string;
 };

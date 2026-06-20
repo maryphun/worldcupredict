@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import BetView from './BetView.vue';
-import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type CoinTransferEntry, type Match, type Snapshot, type User } from './api';
+import { apiBaseConfigured, callApi, pingBackend, snapshot, type BetHistoryEntry, type BetOption, type CoinTransferEntry, type Match, type Snapshot, type User } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
 
 type ViewKey = 'matches' | 'previous' | 'history';
@@ -221,12 +221,14 @@ async function submitAuth() {
   }
 }
 
-async function savePrediction(match: Match, predictedResult: 'home' | 'draw' | 'away', tokenAmount: number) {
+async function savePrediction(match: Match, option: BetOption, tokenAmount: number) {
   await mutate({
     action: 'submitPrediction',
     token: token.value,
     matchId: match.matchId,
-    predictedResult,
+    optionId: option.optionId,
+    marketType: option.marketType,
+    predictedResult: option.outcomeKey,
     tokenAmount,
   }, 'bet');
 }
@@ -415,9 +417,9 @@ function transferText(entry: CoinTransferEntry) {
   return `Received ${entry.amount} coins from ${entry.fromDisplayName}`;
 }
 
-async function savePredictionFromBetView(predictedResult: 'home' | 'draw' | 'away', tokenAmount: number) {
+async function savePredictionFromBetView(option: BetOption, tokenAmount: number) {
   if (!selectedMatch.value) return;
-  await savePrediction(selectedMatch.value, predictedResult, tokenAmount);
+  await savePrediction(selectedMatch.value, option, tokenAmount);
 }
 
 async function reportScoreFromBetView(homeScore: number, awayScore: number, status: string) {
@@ -442,6 +444,7 @@ function statusText(status: string) {
   if (status === 'pending') return 'Waiting';
   if (status === 'won') return 'Won';
   if (status === 'lost') return 'Lost';
+  if (status === 'void') return 'Returned';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -667,7 +670,7 @@ function errorText(err: unknown) {
             <p>{{ entry.matchLabel }}</p>
             <div class="history-stats">
               <span>
-                <small>Pick</small>
+                <small>{{ entry.marketLabel || 'Pick' }}</small>
                 <strong>{{ entry.token }}</strong>
               </span>
               <span>
@@ -744,7 +747,7 @@ function errorText(err: unknown) {
             <div v-else class="profile-list">
               <article v-for="entry in selectedUserBets" :key="entry.predictionId">
                 <strong>{{ entry.matchLabel }}</strong>
-                <span>{{ entry.token }} · {{ entry.tokenAmount }} coins · {{ formatOdds(entry.oddsAtPrediction) }} odds</span>
+                <span>{{ entry.marketLabel || 'Pick' }} · {{ entry.token }} · {{ entry.tokenAmount }} coins · {{ formatOdds(entry.oddsAtPrediction) }} odds</span>
                 <small>{{ statusText(entry.resultStatus) }} · {{ formatKickoff(entry.updatedAt || entry.kickoffAt) }}</small>
               </article>
             </div>

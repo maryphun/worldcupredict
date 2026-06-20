@@ -13,6 +13,7 @@ var SHEETS = {
   users: 'Users',
   matches: 'Matches',
   predictions: 'Predictions',
+  odds: 'Odds',
   audit: 'Audit',
   config: 'Config',
 };
@@ -20,7 +21,8 @@ var SHEETS = {
 var HEADERS = {
   Users: ['userId', 'username', 'displayName', 'passwordSalt', 'passwordHash', 'status', 'role', 'token', 'tokenExpiresAt', 'createdAt', 'approvedAt', 'startingTokens'],
   Matches: ['matchId', 'competition', 'stage', 'groupName', 'homeTeam', 'awayTeam', 'kickoffAt', 'status', 'homeScore', 'awayScore', 'oddsHome', 'oddsDraw', 'oddsAway', 'scoreSource', 'oddsSource', 'lastSyncedAt', 'manualUpdatedBy'],
-  Predictions: ['predictionId', 'userId', 'matchId', 'homeScore', 'awayScore', 'predictedResult', 'oddsAtPrediction', 'tokenAmount', 'updatedAt'],
+  Predictions: ['predictionId', 'userId', 'matchId', 'homeScore', 'awayScore', 'predictedResult', 'marketType', 'marketLabel', 'outcomeLabel', 'line', 'oddsAtPrediction', 'tokenAmount', 'updatedAt'],
+  Odds: ['oddsId', 'matchId', 'marketType', 'marketLabel', 'outcomeKey', 'outcomeLabel', 'line', 'odds', 'source', 'lastSyncedAt'],
   Audit: ['auditId', 'createdAt', 'userId', 'action', 'targetId', 'payload'],
   Config: ['key', 'value'],
 };
@@ -220,7 +222,8 @@ function snapshot_(token) {
   var user = token ? authOptional_(token) : null;
   if (user) refreshLiveOddsForSnapshot_();
   var matchRows = table_(SHEETS.matches).rows;
-  var matches = matchRows.map(publicMatch_);
+  var oddsRows = table_(SHEETS.odds).rows;
+  var matches = matchRows.map(function(match) { return publicMatch_(match, oddsRows); });
   var users = table_(SHEETS.users).rows;
   var auditRows = table_(SHEETS.audit).rows;
   var allPredictions = table_(SHEETS.predictions).rows;
@@ -264,23 +267,32 @@ function submitPrediction_(body) {
     matches = table_(SHEETS.matches).rows;
     match = find_(matches, function(m) { return m.matchId === body.matchId; });
   }
-  var predictedResult = parsePredictedResult_(body.predictedResult);
   var tokenAmount = parseTokenAmount_(body.tokenAmount);
-  var oddsAtPrediction = oddsForResult_(match, predictedResult);
-  if (oddsAtPrediction === '') throw new Error('Odds are not available for this match yet.');
+  var betOption = resolveBetOption_(match, body);
 
   var predictions = table_(SHEETS.predictions);
   var existingPredictions = predictions.rows.filter(function(p) {
     return p.userId === user.userId && p.matchId === match.matchId;
   });
-  if (oppositeBetExists_(existingPredictions, predictedResult)) {
+  if (oppositeBetExists_(existingPredictions, betOption)) {
     throw new Error('You already bet on the opposite team for this match. Draw is still available.');
   }
 
   var availableForThisBet = tokenBalance_(user, matches, predictions.rows);
   if (tokenAmount > availableForThisBet) throw new Error('Not enough coins for this bet.');
 
-  var patch = { homeScore: '', awayScore: '', predictedResult: predictedResult, oddsAtPrediction: oddsAtPrediction, tokenAmount: tokenAmount, updatedAt: nowIso_() };
+  var patch = {
+    homeScore: '',
+    awayScore: '',
+    predictedResult: betOption.predictedResult,
+    marketType: betOption.marketType,
+    marketLabel: betOption.marketLabel,
+    outcomeLabel: betOption.outcomeLabel,
+    line: betOption.line,
+    oddsAtPrediction: betOption.oddsAtPrediction,
+    tokenAmount: tokenAmount,
+    updatedAt: nowIso_(),
+  };
   var prediction = Object.assign({
     predictionId: Utilities.getUuid(),
     userId: user.userId,
@@ -432,9 +444,10 @@ function refreshOddsForWindow_(fromDate, toDate, options) {
   var config = oddsConfig_();
   var from = oddsApiIso_(fromDate);
   var to = oddsApiIso_(toDate);
+  var markets = configValue_('THE_ODDS_MARKETS', 'h2h,spreads,totals');
   var url = config.host + '/v4/sports/' + encodeURIComponent(config.sportKey) + '/odds/?apiKey=' + encodeURIComponent(config.apiKey) +
     '&regions=' + encodeURIComponent(config.regions) +
-    '&markets=h2h&oddsFormat=decimal&dateFormat=iso' +
+    '&markets=' + encodeURIComponent(markets) + '&oddsFormat=decimal&dateFormat=iso' +
     '&commenceTimeFrom=' + encodeURIComponent(from) +
     '&commenceTimeTo=' + encodeURIComponent(to);
 
@@ -549,9 +562,10 @@ function normalizeOddsApiIoOddsFeed_(payload) {
       awayTeam: awayTeam,
       kickoffAt: String(event.date || event.startTime || event.commence_time || event.kickoffAt || ''),
       prices: extractOddsApiIoPrices_(event, homeTeam, awayTeam),
+      sideOdds: extractOddsApiIoSideOdds_(event, homeTeam, awayTeam),
     };
   }).filter(function(event) {
-    return event.eventId && event.prices && (event.prices.home !== '' || event.prices.draw !== '' || event.prices.away !== '');
+    return event.eventId && ((event.prices && (event.prices.home !== '' || event.prices.draw !== '' || event.prices.away !== '')) || (event.sideOdds && event.sideOdds.length));
   });
 }
 
@@ -598,6 +612,77 @@ function collectOddsApiIoMarkets_(markets, totals, homeTeam, awayTeam) {
   });
 }
 
+function extractOddsApiIoSideOdds_(event, homeTeam, awayTeam) {
+  var sideTotals = {};
+  var bookmakers = event.bookmakers || {};
+
+  if (Array.isArray(bookmakers)) {
+    bookmakers.forEach(function(bookmaker) {
+      collectOddsApiIoSideMarkets_(bookmaker.markets || bookmaker.odds || [], sideTotals, homeTeam, awayTeam);
+    });
+  } else {
+    Object.keys(bookmakers).forEach(function(name) {
+      collectOddsApiIoSideMarkets_(bookmakers[name], sideTotals, homeTeam, awayTeam);
+    });
+  }
+
+  return averageSideOdds_(sideTotals);
+}
+
+function collectOddsApiIoSideMarkets_(markets, sideTotals, homeTeam, awayTeam) {
+  if (!Array.isArray(markets)) return;
+  markets.forEach(function(market) {
+    var marketName = String(market.name || market.key || market.market || '').toLowerCase();
+    var rows = market.odds || market.outcomes || market.selections || [];
+
+    if (marketName.indexOf('total') >= 0 || marketName.indexOf('over') >= 0 || marketName.indexOf('under') >= 0) {
+      rows.forEach(function(row) {
+        var direction = overUnderKey_(row.name || row.label || row.outcome || row.selection);
+        if (!direction) return;
+        var line = valueOrBlank_(firstPresent_([row.point, row.line, row.handicap, row.total, market.point, market.line]));
+        addSideOddsTotal_(sideTotals, {
+          marketType: 'total',
+          marketLabel: 'Over / Under',
+          outcomeKey: direction,
+          outcomeLabel: capitalize_(direction) + ' ' + line,
+          line: line,
+        }, row.price || row.odds);
+      });
+      return;
+    }
+
+    if (marketName.indexOf('spread') >= 0 || marketName.indexOf('handicap') >= 0) {
+      rows.forEach(function(row) {
+        var side = sideForTeamName_(row.name || row.label || row.outcome || row.selection, homeTeam, awayTeam);
+        if (!side) return;
+        var line = valueOrBlank_(firstPresent_([row.point, row.line, row.handicap]));
+        addSideOddsTotal_(sideTotals, {
+          marketType: 'handicap',
+          marketLabel: 'Handicap',
+          outcomeKey: side,
+          outcomeLabel: (side === 'home' ? homeTeam : awayTeam) + ' ' + signedLine_(line),
+          line: line,
+        }, row.price || row.odds);
+      });
+      return;
+    }
+
+    if (marketName.indexOf('correct') >= 0 && marketName.indexOf('score') >= 0) {
+      rows.forEach(function(row) {
+        var score = parseScoreOutcomeLabel_(row.name || row.label || row.outcome || row.selection);
+        if (!score) return;
+        addSideOddsTotal_(sideTotals, {
+          marketType: 'correct_score',
+          marketLabel: 'Correct score',
+          outcomeKey: 'score:' + score,
+          outcomeLabel: score,
+          line: score,
+        }, row.price || row.odds);
+      });
+    }
+  });
+}
+
 function addOddsTotal_(total, value) {
   var price = Number(value);
   if (!Number.isFinite(price) || price <= 0) return;
@@ -614,6 +699,8 @@ function applyOddsApiIoToLiveMatches_(events, eventMap) {
   var updated = 0;
   var missingOdds = 0;
   var unmatched = [];
+  var sideRows = [];
+  var sideMatchIds = {};
 
   events.forEach(function(event) {
     var matchId = findMatchIdForOddsApiIoEvent_(eventMap, event.eventId);
@@ -626,6 +713,8 @@ function applyOddsApiIoToLiveMatches_(events, eventMap) {
     var match = matches.rows[index];
     if (!isLiveMatchForOdds_(match)) return;
     if (match.oddsSource === 'manual') return;
+    sideRows = sideRows.concat(sideOddsRowsForMatch_(match, event.sideOdds || [], 'odds-api.io'));
+    sideMatchIds[String(match.matchId)] = true;
     if (event.prices.home === '' || event.prices.draw === '' || event.prices.away === '') {
       missingOdds += 1;
       return;
@@ -641,9 +730,12 @@ function applyOddsApiIoToLiveMatches_(events, eventMap) {
     updated += 1;
   });
 
+  var sideUpdated = upsertSideOddsRows_(sideRows, sideMatchIds);
+
   return {
     events: events.length,
     updated: updated,
+    sideOdds: sideUpdated,
     unmatched: unmatched.slice(0, 8),
     missingOdds: missingOdds,
   };
@@ -740,18 +832,22 @@ function normalizeOddsFeed_(payload) {
   if (!Array.isArray(payload)) return [];
   return payload.map(function(event) {
     var totals = {};
+    var sideTotals = {};
     (event.bookmakers || []).forEach(function(bookmaker) {
       (bookmaker.markets || []).forEach(function(market) {
-        if (market.key !== 'h2h') return;
-        (market.outcomes || []).forEach(function(outcome) {
-          var price = Number(outcome.price);
-          if (!Number.isFinite(price)) return;
-          var key = normalizeTeamNameForOdds_(outcome.name);
-          if (!key) return;
-          if (!totals[key]) totals[key] = { sum: 0, count: 0 };
-          totals[key].sum += price;
-          totals[key].count += 1;
-        });
+        if (market.key === 'h2h') {
+          (market.outcomes || []).forEach(function(outcome) {
+            var price = Number(outcome.price);
+            if (!Number.isFinite(price)) return;
+            var key = normalizeTeamNameForOdds_(outcome.name);
+            if (!key) return;
+            if (!totals[key]) totals[key] = { sum: 0, count: 0 };
+            totals[key].sum += price;
+            totals[key].count += 1;
+          });
+          return;
+        }
+        collectTheOddsSideMarket_(sideTotals, market, event.home_team, event.away_team);
       });
     });
 
@@ -766,9 +862,82 @@ function normalizeOddsFeed_(payload) {
       awayTeam: String(event.away_team || ''),
       kickoffAt: String(event.commence_time || ''),
       prices: prices,
+      sideOdds: averageSideOdds_(sideTotals),
     };
   }).filter(function(event) {
     return event.homeTeam && event.awayTeam && event.kickoffAt;
+  });
+}
+
+function collectTheOddsSideMarket_(sideTotals, market, homeTeam, awayTeam) {
+  var key = String(market.key || '').toLowerCase();
+  if (key === 'spreads' || key === 'alternate_spreads') {
+    (market.outcomes || []).forEach(function(outcome) {
+      var side = sideForTeamName_(outcome.name, homeTeam, awayTeam);
+      if (!side) return;
+      var line = valueOrBlank_(outcome.point);
+      addSideOddsTotal_(sideTotals, {
+        marketType: 'handicap',
+        marketLabel: 'Handicap',
+        outcomeKey: side,
+        outcomeLabel: (side === 'home' ? homeTeam : awayTeam) + ' ' + signedLine_(line),
+        line: line,
+      }, outcome.price);
+    });
+    return;
+  }
+
+  if (key === 'totals' || key === 'alternate_totals') {
+    (market.outcomes || []).forEach(function(outcome) {
+      var direction = overUnderKey_(outcome.name);
+      if (!direction) return;
+      var line = valueOrBlank_(outcome.point);
+      addSideOddsTotal_(sideTotals, {
+        marketType: 'total',
+        marketLabel: 'Over / Under',
+        outcomeKey: direction,
+        outcomeLabel: capitalize_(direction) + ' ' + line,
+        line: line,
+      }, outcome.price);
+    });
+    return;
+  }
+
+  if (key === 'correct_score' || key === 'correctscore' || key === 'exact_score') {
+    (market.outcomes || []).forEach(function(outcome) {
+      var score = parseScoreOutcomeLabel_(outcome.name);
+      if (!score) return;
+      addSideOddsTotal_(sideTotals, {
+        marketType: 'correct_score',
+        marketLabel: 'Correct score',
+        outcomeKey: 'score:' + score,
+        outcomeLabel: score,
+        line: score,
+      }, outcome.price);
+    });
+  }
+}
+
+function addSideOddsTotal_(sideTotals, option, value) {
+  var odds = Number(value);
+  if (!Number.isFinite(odds) || odds <= 0) return;
+  var key = option.marketType + '::' + option.outcomeKey + '::' + option.line;
+  if (!sideTotals[key]) sideTotals[key] = Object.assign({ sum: 0, count: 0 }, option);
+  sideTotals[key].sum += odds;
+  sideTotals[key].count += 1;
+}
+
+function averageSideOdds_(sideTotals) {
+  return Object.keys(sideTotals).map(function(key) {
+    var item = sideTotals[key];
+    return {
+      marketType: item.marketType,
+      marketLabel: item.marketLabel,
+      outcomeKey: item.outcomeKey,
+      outcomeLabel: item.outcomeLabel,
+      line: item.line,
+      odds: Math.round((item.sum / item.count) * 100) / 100,
+    };
   });
 }
 
@@ -779,6 +948,8 @@ function applyOddsToMatches_(events, options) {
   var skippedManual = 0;
   var skippedNotLive = 0;
   var unmatched = [];
+  var sideRows = [];
+  var sideMatchIds = {};
   options = options || {};
 
   events.forEach(function(event) {
@@ -799,6 +970,9 @@ function applyOddsToMatches_(events, options) {
       return;
     }
 
+    sideRows = sideRows.concat(sideOddsRowsForMatch_(match, event.sideOdds || [], 'odds-api'));
+    sideMatchIds[String(match.matchId)] = true;
+
     var oddsHome = valueOrBlank_(event.prices[normalizeTeamNameForOdds_(match.homeTeam)]);
     var oddsDraw = valueOrBlank_(event.prices.draw);
     var oddsAway = valueOrBlank_(event.prices[normalizeTeamNameForOdds_(match.awayTeam)]);
@@ -817,14 +991,107 @@ function applyOddsToMatches_(events, options) {
     updated += 1;
   });
 
+  var sideUpdated = upsertSideOddsRows_(sideRows, sideMatchIds);
+
   return {
     events: events.length,
     updated: updated,
+    sideOdds: sideUpdated,
     unmatched: unmatched.slice(0, 8),
     missingOdds: missingOdds,
     skippedManual: skippedManual,
     skippedNotLive: skippedNotLive,
   };
+}
+
+function sideOddsRowsForMatch_(match, sideOdds, source) {
+  return (sideOdds || []).map(function(option) {
+    var odds = valueOrBlank_(option.odds);
+    if (odds === '') return null;
+    var row = {
+      matchId: String(match.matchId),
+      marketType: option.marketType,
+      marketLabel: option.marketLabel,
+      outcomeKey: option.outcomeKey,
+      outcomeLabel: option.outcomeLabel,
+      line: option.line == null ? '' : option.line,
+      odds: odds,
+      source: source,
+      lastSyncedAt: nowIso_(),
+    };
+    row.oddsId = sideOddsId_(row.matchId, row.marketType, row.outcomeKey, row.line);
+    return row;
+  }).filter(function(row) {
+    return row && row.marketType && row.outcomeKey;
+  });
+}
+
+function upsertSideOddsRows_(sideRows, matchIds) {
+  matchIds = matchIds || {};
+  var matchIdKeys = Object.keys(matchIds);
+  if (!matchIdKeys.length) return 0;
+
+  var odds = table_(SHEETS.odds);
+  var manualIds = {};
+  odds.rows.forEach(function(row) {
+    if (matchIds[String(row.matchId)] && row.source === 'manual') manualIds[String(row.oddsId)] = true;
+  });
+
+  var providerRows = (sideRows || []).filter(function(row) {
+    return !manualIds[String(row.oddsId)];
+  });
+  var keptRows = odds.rows.filter(function(row) {
+    return row.source === 'manual' || !matchIds[String(row.matchId)];
+  });
+
+  replaceRows_(SHEETS.odds, keptRows.concat(providerRows));
+  return providerRows.length;
+}
+
+function sideOddsId_(matchId, marketType, outcomeKey, line) {
+  return [matchId, marketType, outcomeKey, line].map(function(part) {
+    return String(part == null ? '' : part).trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_');
+  }).join('|');
+}
+
+function sideMarketOrder_(marketType) {
+  if (marketType === 'total') return 1;
+  if (marketType === 'handicap') return 2;
+  if (marketType === 'correct_score') return 3;
+  return 9;
+}
+
+function sideForTeamName_(value, homeTeam, awayTeam) {
+  var key = normalizeTeamNameForOdds_(value);
+  if (!key) return '';
+  if (key === normalizeTeamNameForOdds_(homeTeam)) return 'home';
+  if (key === normalizeTeamNameForOdds_(awayTeam)) return 'away';
+  return '';
+}
+
+function overUnderKey_(value) {
+  var key = String(value || '').trim().toLowerCase();
+  if (key.indexOf('over') >= 0) return 'over';
+  if (key.indexOf('under') >= 0) return 'under';
+  return '';
+}
+
+function signedLine_(line) {
+  var n = Number(line);
+  if (!Number.isFinite(n)) return String(line || '');
+  return n > 0 ? '+' + n : String(n);
+}
+
+function capitalize_(value) {
+  value = String(value || '');
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function parseScoreOutcomeLabel_(value) {
+  var text = String(value || '').trim();
+  var match = text.match(/(\d{1,2})\s*[-:]\s*(\d{1,2})/);
+  if (!match) return '';
+  return Number(match[1]) + '-' + Number(match[2]);
 }
 
 function findOddsMatchIndex_(matches, event) {
@@ -1134,7 +1401,11 @@ function betHistory_(viewer, matches, predictions, users) {
       predictedHomeScore: prediction.homeScore,
       predictedAwayScore: prediction.awayScore,
       predictedResult: prediction.predictedResult,
-      token: resultToken_(prediction.predictedResult, match),
+      marketType: predictionMarketType_(prediction),
+      marketLabel: prediction.marketLabel || 'Match winner',
+      outcomeLabel: prediction.outcomeLabel || resultToken_(prediction.predictedResult, match),
+      line: prediction.line || '',
+      token: prediction.outcomeLabel || resultToken_(prediction.predictedResult, match),
       tokenAmount: Number(prediction.tokenAmount || 0),
       oddsAtPrediction: prediction.oddsAtPrediction,
       points: scorePrediction_(prediction, match),
@@ -1184,14 +1455,15 @@ function scorePrediction_(prediction, match) {
 
 function predictionStatus_(prediction, match) {
   if (!match || match.homeScore === '' || match.awayScore === '' || match.status !== 'final') return 'pending';
-  return prediction.predictedResult === resultFromScores_(Number(match.homeScore), Number(match.awayScore)) ? 'won' : 'lost';
+  var outcome = evaluatePrediction_(prediction, match);
+  return outcome;
 }
 
-function oppositeBetExists_(predictions, predictedResult) {
-  if (predictedResult === 'draw') return false;
-  var opposite = predictedResult === 'home' ? 'away' : 'home';
+function oppositeBetExists_(predictions, betOption) {
+  if (betOption.marketType !== 'h2h' || betOption.predictedResult === 'draw') return false;
+  var opposite = betOption.predictedResult === 'home' ? 'away' : 'home';
   return predictions.some(function(prediction) {
-    return prediction.predictedResult === opposite;
+    return predictionMarketType_(prediction) === 'h2h' && prediction.predictedResult === opposite;
   });
 }
 
@@ -1209,8 +1481,51 @@ function tokenBalance_(user, matches, predictions, auditRows) {
 
 function payoutForPrediction_(prediction, match) {
   if (!match || match.status !== 'final' || match.homeScore === '' || match.awayScore === '') return 0;
-  if (prediction.predictedResult !== resultFromScores_(Number(match.homeScore), Number(match.awayScore))) return 0;
+  var status = evaluatePrediction_(prediction, match);
+  if (status === 'void') return Number(prediction.tokenAmount || 0);
+  if (status !== 'won') return 0;
   return Math.floor(Number(prediction.tokenAmount || 0) * oddsMultiplier_(prediction.oddsAtPrediction));
+}
+
+function predictionMarketType_(prediction) {
+  return prediction.marketType || 'h2h';
+}
+
+function evaluatePrediction_(prediction, match) {
+  var homeScore = Number(match.homeScore);
+  var awayScore = Number(match.awayScore);
+  var marketType = predictionMarketType_(prediction);
+
+  if (marketType === 'h2h') {
+    return prediction.predictedResult === resultFromScores_(homeScore, awayScore) ? 'won' : 'lost';
+  }
+
+  if (marketType === 'total') {
+    var total = homeScore + awayScore;
+    var totalLine = Number(prediction.line);
+    if (!Number.isFinite(totalLine)) return 'lost';
+    if (total === totalLine) return 'void';
+    if (prediction.predictedResult === 'over') return total > totalLine ? 'won' : 'lost';
+    if (prediction.predictedResult === 'under') return total < totalLine ? 'won' : 'lost';
+    return 'lost';
+  }
+
+  if (marketType === 'handicap') {
+    var line = Number(prediction.line);
+    if (!Number.isFinite(line)) return 'lost';
+    var adjustedHome = homeScore + (prediction.predictedResult === 'home' ? line : 0);
+    var adjustedAway = awayScore + (prediction.predictedResult === 'away' ? line : 0);
+    if (adjustedHome === adjustedAway) return 'void';
+    if (prediction.predictedResult === 'home') return adjustedHome > adjustedAway ? 'won' : 'lost';
+    if (prediction.predictedResult === 'away') return adjustedAway > adjustedHome ? 'won' : 'lost';
+    return 'lost';
+  }
+
+  if (marketType === 'correct_score') {
+    return prediction.predictedResult === 'score:' + homeScore + '-' + awayScore ? 'won' : 'lost';
+  }
+
+  return 'lost';
 }
 
 function oddsMultiplier_(value) {
@@ -1256,7 +1571,9 @@ function ensureStartingTokens_(users, index) {
 }
 
 function table_(name) {
-  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (HEADERS[name]) ensureHeaders_(sheet, HEADERS[name]);
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
   var rows = values.slice(1).filter(function(r) {
@@ -1362,7 +1679,7 @@ function publicUser_(user, matches, predictions, auditRows) {
   };
 }
 
-function publicMatch_(match) {
+function publicMatch_(match, oddsRows) {
   return {
     matchId: match.matchId,
     competition: match.competition,
@@ -1377,9 +1694,29 @@ function publicMatch_(match) {
     oddsHome: match.oddsHome,
     oddsDraw: match.oddsDraw,
     oddsAway: match.oddsAway,
+    sideOdds: publicSideOdds_(match.matchId, oddsRows),
     scoreSource: match.scoreSource,
     oddsSource: match.oddsSource,
   };
+}
+
+function publicSideOdds_(matchId, oddsRows) {
+  return (oddsRows || []).filter(function(row) {
+    return String(row.matchId) === String(matchId) && row.odds !== '';
+  }).map(function(row) {
+    return {
+      optionId: row.oddsId,
+      marketType: row.marketType,
+      marketLabel: row.marketLabel,
+      outcomeKey: row.outcomeKey,
+      outcomeLabel: row.outcomeLabel,
+      line: row.line,
+      odds: row.odds,
+      source: row.source,
+    };
+  }).sort(function(a, b) {
+    return sideMarketOrder_(a.marketType) - sideMarketOrder_(b.marketType) || String(a.outcomeLabel).localeCompare(String(b.outcomeLabel));
+  });
 }
 
 function hashPassword_(salt, password) {
@@ -1401,6 +1738,42 @@ function parsePredictedResult_(value) {
   var result = String(value || '').trim().toLowerCase();
   if (['home', 'draw', 'away'].indexOf(result) < 0) throw new Error('Choose a team or draw.');
   return result;
+}
+
+function resolveBetOption_(match, body) {
+  var marketType = String(body.marketType || 'h2h').trim().toLowerCase();
+  if (marketType === 'winner') marketType = 'h2h';
+
+  if (marketType === 'h2h') {
+    var predictedResult = parsePredictedResult_(body.predictedResult);
+    var oddsAtPrediction = oddsForResult_(match, predictedResult);
+    if (oddsAtPrediction === '') throw new Error('Odds are not available for this match yet.');
+    return {
+      marketType: 'h2h',
+      marketLabel: 'Match winner',
+      predictedResult: predictedResult,
+      outcomeLabel: resultToken_(predictedResult, match),
+      line: '',
+      oddsAtPrediction: oddsAtPrediction,
+    };
+  }
+
+  if (['total', 'handicap', 'correct_score'].indexOf(marketType) < 0) throw new Error('Bet type is not available.');
+  var optionId = String(body.optionId || '').trim();
+  if (!optionId) throw new Error('Choose an available betting option.');
+  var option = find_(table_(SHEETS.odds).rows, function(row) {
+    return String(row.oddsId) === optionId && String(row.matchId) === String(match.matchId) && String(row.marketType) === marketType;
+  });
+  if (!option || option.odds === '') throw new Error('That side bet is not available anymore.');
+
+  return {
+    marketType: option.marketType,
+    marketLabel: option.marketLabel,
+    predictedResult: option.outcomeKey,
+    outcomeLabel: option.outcomeLabel,
+    line: option.line,
+    oddsAtPrediction: valueOrBlank_(option.odds),
+  };
 }
 
 function parseTokenAmount_(value) {

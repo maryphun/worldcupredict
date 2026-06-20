@@ -561,6 +561,64 @@ h3 {
   color: #ffffff;
 }
 
+.side-market-list {
+  display: grid;
+  gap: 14px;
+}
+
+.side-market-group {
+  display: grid;
+  gap: 8px;
+}
+
+.side-market-group h3 {
+  margin: 0;
+  color: #4f6690;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.side-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.side-pick-card {
+  display: grid;
+  min-height: 70px;
+  gap: 4px;
+  align-content: center;
+  border: 2px solid #c6d6f1;
+  border-radius: 18px;
+  padding: 10px;
+  color: #07162f;
+  background: linear-gradient(180deg, #ffffff, #f2f7ff);
+  box-shadow: 0 10px 20px rgba(7, 22, 47, 0.06);
+  text-align: center;
+}
+
+.side-pick-card span {
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.side-pick-card strong {
+  color: #0a3d91;
+  font-size: 1.1rem;
+}
+
+.side-pick-card.active {
+  border-color: rgba(47, 111, 228, 0.78);
+  color: #ffffff;
+  background: linear-gradient(135deg, #0b4db6, #061733);
+  box-shadow: 0 14px 28px rgba(10, 61, 145, 0.22);
+}
+
+.side-pick-card.active strong {
+  color: #ffffff;
+}
+
 .bet-note {
   margin: 0;
   border: 1px solid rgba(47, 111, 228, 0.16);

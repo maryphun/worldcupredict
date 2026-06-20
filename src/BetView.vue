@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import type { BetHistoryEntry, Match } from './api';
+import type { BetHistoryEntry, BetOption, Match } from './api';
 import { flagBackgroundStyle, teamFlagUrl } from './flags';
-
-type Pick = 'home' | 'draw' | 'away';
 
 const props = defineProps<{
   match: Match;
@@ -16,21 +14,32 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   back: [];
-  savePrediction: [predictedResult: Pick, tokenAmount: number];
+  savePrediction: [option: BetOption, tokenAmount: number];
   reportScore: [homeScore: number, awayScore: number, status: string];
   openUser: [userId: string];
 }>();
 
 const score = reactive({ homeScore: 0, awayScore: 0, status: 'live' });
-const selectedPick = ref<Pick | ''>('');
+const selectedOptionId = ref('');
 const tokenInput = ref('');
 const modalOpen = ref(false);
 
-const pickOptions = computed(() => [
-  { key: 'home' as const, label: props.match.homeTeam, odds: props.match.oddsHome },
-  { key: 'draw' as const, label: 'Draw', odds: props.match.oddsDraw },
-  { key: 'away' as const, label: props.match.awayTeam, odds: props.match.oddsAway },
+const winnerOptions = computed<BetOption[]>(() => [
+  { optionId: `${props.match.matchId}:h2h:home`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'home', outcomeLabel: props.match.homeTeam, line: '', odds: props.match.oddsHome },
+  { optionId: `${props.match.matchId}:h2h:draw`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'draw', outcomeLabel: 'Draw', line: '', odds: props.match.oddsDraw },
+  { optionId: `${props.match.matchId}:h2h:away`, marketType: 'h2h', marketLabel: 'Match winner', outcomeKey: 'away', outcomeLabel: props.match.awayTeam, line: '', odds: props.match.oddsAway },
 ]);
+const sideOptions = computed(() => props.match.sideOdds ?? []);
+const sideMarketGroups = computed(() => {
+  const groups = sideOptions.value.reduce<Record<string, { label: string; options: BetOption[] }>>((map, option) => {
+    const key = option.marketType;
+    if (!map[key]) map[key] = { label: option.marketLabel, options: [] };
+    map[key].options.push(option);
+    return map;
+  }, {});
+  return Object.values(groups);
+});
+const allOptions = computed(() => [...winnerOptions.value, ...sideOptions.value]);
 const sortedEntries = computed(() => [...props.entries].sort((a, b) => (
   Number(b.isMine) - Number(a.isMine)
   || new Date(b.updatedAt || b.kickoffAt).getTime() - new Date(a.updatedAt || a.kickoffAt).getTime()
@@ -42,7 +51,7 @@ const activePickCount = computed(() => myActiveEntries.value.length);
 const tokenAmount = computed(() => Number(tokenInput.value || 0));
 const maxBetTokens = computed(() => Math.max(0, Number(props.tokenBalance || 0)));
 const isOverBalance = computed(() => tokenAmount.value > maxBetTokens.value);
-const selectedOption = computed(() => pickOptions.value.find((option) => option.key === selectedPick.value));
+const selectedOption = computed(() => allOptions.value.find((option) => option.optionId === selectedOptionId.value));
 const selectedOddsMultiplier = computed(() => {
   const odds = Number(selectedOption.value?.odds);
   return Number.isFinite(odds) && odds > 0 ? odds : 2;
@@ -52,7 +61,7 @@ const potentialReturn = computed(() => Math.floor(tokenAmount.value * selectedOd
 watch(
   () => props.match.matchId,
   () => {
-    selectedPick.value = '';
+    selectedOptionId.value = '';
     tokenInput.value = '';
   },
   { immediate: true },
@@ -68,16 +77,16 @@ watch(
   { immediate: true, deep: true },
 );
 
-function choosePick(pick: Pick) {
-  if (props.locked || isPickBlocked(pick)) return;
-  selectedPick.value = pick;
+function choosePick(option: BetOption) {
+  if (props.locked || isPickBlocked(option) || formatOdds(option.odds) === '-') return;
+  selectedOptionId.value = option.optionId;
   modalOpen.value = true;
 }
 
-function isPickBlocked(pick: Pick) {
-  if (pick === 'draw') return false;
-  const opposite = pick === 'home' ? 'away' : 'home';
-  return myActiveEntries.value.some((entry) => entry.predictedResult === opposite);
+function isPickBlocked(option: BetOption) {
+  if (option.marketType !== 'h2h' || option.outcomeKey === 'draw') return false;
+  const opposite = option.outcomeKey === 'home' ? 'away' : 'home';
+  return myActiveEntries.value.some((entry) => (entry.marketType || 'h2h') === 'h2h' && entry.predictedResult === opposite);
 }
 
 function pressDigit(digit: string) {
@@ -95,8 +104,8 @@ function clearTokens() {
 }
 
 function confirmBet() {
-  if (!selectedPick.value || tokenAmount.value < 1 || isOverBalance.value) return;
-  emit('savePrediction', selectedPick.value, tokenAmount.value);
+  if (!selectedOption.value || tokenAmount.value < 1 || isOverBalance.value) return;
+  emit('savePrediction', selectedOption.value, tokenAmount.value);
   modalOpen.value = false;
 }
 
@@ -108,6 +117,7 @@ function statusText(status: string) {
   if (status === 'pending') return 'Waiting';
   if (status === 'won') return 'Won';
   if (status === 'lost') return 'Lost';
+  if (status === 'void') return 'Returned';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -158,12 +168,25 @@ function formatOdds(value: number | string | '') {
         </div>
 
         <div class="pick-grid">
-          <button v-for="option in pickOptions" :key="option.key" type="button" class="pick-card" :class="{ active: selectedPick === option.key, blocked: isPickBlocked(option.key) }" :disabled="locked || loading || isPickBlocked(option.key)" @click="choosePick(option.key)">
-            <span>{{ option.label }}</span>
+          <button v-for="option in winnerOptions" :key="option.optionId" type="button" class="pick-card" :class="{ active: selectedOptionId === option.optionId, blocked: isPickBlocked(option) }" :disabled="locked || loading || isPickBlocked(option)" @click="choosePick(option)">
+            <span>{{ option.outcomeLabel }}</span>
             <strong>{{ formatOdds(option.odds) }}</strong>
-            <small v-if="!locked && isPickBlocked(option.key)">Locked</small>
+            <small v-if="!locked && isPickBlocked(option)">Locked</small>
           </button>
         </div>
+
+        <div v-if="sideMarketGroups.length" class="side-market-list">
+          <section v-for="group in sideMarketGroups" :key="group.label" class="side-market-group">
+            <h3>{{ group.label }}</h3>
+            <div class="side-pick-grid">
+              <button v-for="option in group.options" :key="option.optionId" type="button" class="side-pick-card" :class="{ active: selectedOptionId === option.optionId }" :disabled="locked || loading" @click="choosePick(option)">
+                <span>{{ option.outcomeLabel }}</span>
+                <strong>{{ formatOdds(option.odds) }}</strong>
+              </button>
+            </div>
+          </section>
+        </div>
+        <p v-else class="bet-note">Side bets appear here when Over/Under, handicap, or correct score odds are available.</p>
         <p v-if="activePickCount" class="bet-note">You can add more bets. The opposite team is locked, but draw stays open.</p>
       </div>
 
@@ -214,7 +237,7 @@ function formatOdds(value: number | string | '') {
         </div>
         <div class="history-stats">
           <span>
-            <small>Pick</small>
+            <small>{{ entry.marketLabel || 'Pick' }}</small>
             <strong>{{ entry.token }}</strong>
           </span>
           <span>
@@ -239,7 +262,7 @@ function formatOdds(value: number | string | '') {
           <h2>Coin amount</h2>
           <button type="button" class="ghost-button small-button" @click="modalOpen = false">Close</button>
         </div>
-        <p class="token-pick">Pick: <strong>{{ selectedOption?.label }}</strong></p>
+        <p class="token-pick">Pick: <strong>{{ selectedOption?.outcomeLabel }}</strong></p>
         <p class="token-help">Available to bet: <strong>{{ maxBetTokens }}</strong> coins</p>
         <div class="token-display">{{ tokenInput || '0' }}</div>
         <div class="return-preview">
