@@ -144,6 +144,13 @@ function formatOdds(value: number | string | '') {
   const n = Number(value);
   return Number.isFinite(n) ? n.toFixed(2) : String(value);
 }
+
+function payoutText(entry: BetHistoryEntry) {
+  const stake = Number(entry.tokenAmount || 0);
+  const odds = Number(entry.oddsAtPrediction);
+  if (!Number.isFinite(stake) || !Number.isFinite(odds) || stake <= 0 || odds <= 0) return '-';
+  return `${Math.floor(stake * odds)} coins`;
+}
 </script>
 
 <template>
@@ -255,6 +262,10 @@ function formatOdds(value: number | string | '') {
           <span>
             <small>Odds</small>
             <strong>{{ formatOdds(entry.oddsAtPrediction) }}</strong>
+          </span>
+          <span>
+            <small>Payout</small>
+            <strong>{{ payoutText(entry) }}</strong>
           </span>
           <span>
             <small>Result</small>

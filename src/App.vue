@@ -651,6 +651,13 @@ function formatOdds(value: number | string | '') {
   return Number.isFinite(n) ? n.toFixed(2) : String(value);
 }
 
+function payoutText(entry: BetHistoryEntry) {
+  const stake = Number(entry.tokenAmount || 0);
+  const odds = Number(entry.oddsAtPrediction);
+  if (!Number.isFinite(stake) || !Number.isFinite(odds) || stake <= 0 || odds <= 0) return '-';
+  return `${Math.floor(stake * odds)} coins`;
+}
+
 function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
@@ -856,6 +863,10 @@ function errorText(err: unknown) {
                 <strong>{{ formatOdds(entry.oddsAtPrediction) }}</strong>
               </span>
               <span>
+                <small>Payout</small>
+                <strong>{{ payoutText(entry) }}</strong>
+              </span>
+              <span>
                 <small>Result</small>
                 <strong>{{ statusText(entry.resultStatus) }}</strong>
               </span>
@@ -951,7 +962,7 @@ function errorText(err: unknown) {
             <div v-else class="profile-list">
               <article v-for="entry in selectedUserBets" :key="entry.predictionId" :class="{ won: entry.resultStatus === 'won', lost: entry.resultStatus === 'lost', returned: entry.resultStatus === 'void' }">
                 <strong>{{ entry.matchLabel }}</strong>
-                <span>{{ entry.marketLabel || 'Pick' }} · {{ entry.token }} · {{ entry.tokenAmount }} coins · {{ formatOdds(entry.oddsAtPrediction) }} odds</span>
+                <span>{{ entry.marketLabel || 'Pick' }} - {{ entry.token }} - {{ entry.tokenAmount }} coins - {{ formatOdds(entry.oddsAtPrediction) }} odds - Payout {{ payoutText(entry) }}</span>
                 <small>{{ statusText(entry.resultStatus) }} · {{ formatKickoff(entry.updatedAt || entry.kickoffAt) }}</small>
               </article>
             </div>

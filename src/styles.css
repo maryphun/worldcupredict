@@ -1528,7 +1528,7 @@ small {
 
 .history-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -2078,7 +2078,7 @@ small {
   }
 
   .history-stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 5px;
   }
 
@@ -2355,7 +2355,7 @@ small {
 
   .history-stats {
     grid-column: auto;
-    grid-template-columns: minmax(150px, 1.45fr) minmax(92px, 0.8fr) minmax(92px, 0.8fr) minmax(112px, 0.9fr);
+    grid-template-columns: minmax(150px, 1.45fr) repeat(4, minmax(92px, 0.8fr));
     gap: 8px;
     min-width: 0;
   }
@@ -2374,6 +2374,6 @@ small {
   }
 
   .bet-page .history-stats {
-    grid-template-columns: minmax(220px, 1.7fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr) minmax(150px, 1fr);
+    grid-template-columns: minmax(220px, 1.7fr) repeat(4, minmax(120px, 0.85fr));
   }
 }
