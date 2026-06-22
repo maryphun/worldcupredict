@@ -83,16 +83,8 @@ const settledRecordByUser = computed(() => {
     return map;
   }, {});
 });
-const finishedBetsByUser = computed(() => {
-  return betHistory.value.reduce<Record<string, number>>((map, entry) => {
-    if (entry.resultStatus === 'pending') return map;
-    map[entry.userId] = (map[entry.userId] ?? 0) + 1;
-    return map;
-  }, {});
-});
 const displayLeaderboard = computed(() => {
   return data.value.leaderboard
-    .filter((entry) => (finishedBetsByUser.value[entry.userId] ?? 0) >= 1)
     .map((entry) => {
       const record = settledRecordByUser.value[entry.userId] ?? { wins: 0, losses: 0 };
       return {
@@ -105,7 +97,13 @@ const displayLeaderboard = computed(() => {
     })
     .sort((a, b) => b.displayTotal - a.displayTotal || b.displayWins - a.displayWins || a.displayLosses - b.displayLosses || a.displayName.localeCompare(b.displayName));
 });
-const visibleLeaderboard = computed(() => displayLeaderboard.value.slice(0, 12));
+const leaderboardColumns = computed(() => {
+  const midpoint = Math.ceil(displayLeaderboard.value.length / 2);
+  return [
+    { key: 'left', rankOffset: 0, entries: displayLeaderboard.value.slice(0, midpoint) },
+    { key: 'right', rankOffset: midpoint, entries: displayLeaderboard.value.slice(midpoint) },
+  ].filter((column) => column.entries.length);
+});
 const selectedUserProfile = computed(() => {
   if (!selectedUserId.value) return null;
   return displayLeaderboard.value.find((entry) => entry.userId === selectedUserId.value)
@@ -755,32 +753,33 @@ function errorText(err: unknown) {
               <p class="leaderboard-prize">&#31532;&#19968;&#21517;&#21487;&#20197;&#25910;&#29554;&#19968;&#20491;&#12300;&#31639;&#20320;&#21426;&#23475;&#12301;</p>
             </div>
           </div>
-          <ol class="leaderboard">
-            <li
-              v-for="(entry, index) in visibleLeaderboard"
-              :key="entry.userId"
-              class="profile-trigger"
-              role="button"
-              tabindex="0"
-              @click="openUserProfile(entry.userId)"
-              @keydown.enter.prevent="openUserProfile(entry.userId)"
-              @keydown.space.prevent="openUserProfile(entry.userId)"
-            >
-              <strong class="leaderboard-rank">{{ index + 1 }}</strong>
-              <span class="leaderboard-player">
-                <span>{{ entry.displayName }}</span>
-                <small>
-                  <span class="record-win">{{ entry.displayWins }}W</span>
-                  <span class="record-loss">{{ entry.displayLosses }}L</span>
-                  <span v-if="entry.activeBetCount" class="active-bet-chip">{{ entry.activeBetCount }} active {{ entry.activeBetCount === 1 ? 'bet' : 'bets' }}</span>
-                </small>
-              </span>
-              <strong>{{ entry.displayTotal }} coins</strong>
-            </li>
-          </ol>
+          <div class="leaderboard-columns">
+            <ol v-for="column in leaderboardColumns" :key="column.key" class="leaderboard">
+              <li
+                v-for="(entry, index) in column.entries"
+                :key="entry.userId"
+                class="profile-trigger"
+                role="button"
+                tabindex="0"
+                @click="openUserProfile(entry.userId)"
+                @keydown.enter.prevent="openUserProfile(entry.userId)"
+                @keydown.space.prevent="openUserProfile(entry.userId)"
+              >
+                <strong class="leaderboard-rank">{{ column.rankOffset + index + 1 }}</strong>
+                <span class="leaderboard-player">
+                  <span>{{ entry.displayName }}</span>
+                  <small>
+                    <span class="record-win">{{ entry.displayWins }}W</span>
+                    <span class="record-loss">{{ entry.displayLosses }}L</span>
+                    <span v-if="entry.activeBetCount" class="active-bet-chip">{{ entry.activeBetCount }} active {{ entry.activeBetCount === 1 ? 'bet' : 'bets' }}</span>
+                  </small>
+                </span>
+                <strong>{{ entry.displayTotal }} coins</strong>
+              </li>
+            </ol>
+          </div>
           <p class="leaderboard-disclaimer">
-            Leaderboard ranking starts after a player has at least 1 finished bet. Active bets do not count yet.
-            <span v-if="displayLeaderboard.length > visibleLeaderboard.length">Showing top {{ visibleLeaderboard.length }}.</span>
+            All approved players are shown. Active bets do not count yet.
           </p>
         </div>
       </section>
