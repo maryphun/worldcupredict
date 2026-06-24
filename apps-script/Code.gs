@@ -313,7 +313,7 @@ function submitPrediction_(body) {
     marketType: betOption.marketType,
     marketLabel: betOption.marketLabel,
     outcomeLabel: betOption.outcomeLabel,
-    line: betOption.line,
+    line: betLineForSheet_(betOption.line),
     oddsAtPrediction: betOption.oddsAtPrediction,
     tokenAmount: tokenAmount,
     updatedAt: nowIso_(),
@@ -1291,6 +1291,9 @@ function signedLine_(line) {
 
 function parseBetLine_(value) {
   if (value == null || value === '') return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return sheetDateToSerialLine_(value);
+  }
   var direct = Number(value);
   if (Number.isFinite(direct)) return direct;
   var text = String(value || '').trim();
@@ -1298,6 +1301,18 @@ function parseBetLine_(value) {
   if (!match) return '';
   var parsed = Number(match[0]);
   return Number.isFinite(parsed) ? parsed : '';
+}
+
+function betLineForSheet_(line) {
+  if (line == null || line === '') return '';
+  var parsed = parseBetLine_(line);
+  return parsed === '' ? String(line) : "'" + String(parsed);
+}
+
+function sheetDateToSerialLine_(date) {
+  var epoch = new Date(1899, 11, 30);
+  var days = (date.getTime() - epoch.getTime()) / (24 * 60 * 60 * 1000);
+  return Math.round(days * 1000) / 1000;
 }
 
 function capitalize_(value) {
