@@ -200,14 +200,15 @@ const selectedUserGraphItems = computed(() => {
     };
   });
 
-  return items.map((item, index) => {
-    const overlapsPrevious = index > 0 && boxesOverlap_(item.labelBox, items[index - 1].labelBox, labelGap);
-    const overlapsNext = index < items.length - 1 && boxesOverlap_(item.labelBox, items[index + 1].labelBox, labelGap);
+  const visibleLabelBoxes: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+  return items.map((item) => ({ ...item, showValue: false })).reverse().map((item) => {
+    const overlapsNewer = visibleLabelBoxes.some((box) => boxesOverlap_(item.labelBox, box, labelGap));
+    if (!overlapsNewer) visibleLabelBoxes.push(item.labelBox);
     return {
       ...item,
-      showValue: !overlapsPrevious && !overlapsNext,
+      showValue: !overlapsNewer,
     };
-  });
+  }).reverse();
 });
 const selectedUserGraphPoints = computed(() => {
   return selectedUserGraphItems.value.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
