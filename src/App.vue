@@ -167,27 +167,45 @@ const selectedUserGraphItems = computed(() => {
   const plotTop = 24;
   const plotBottom = 124;
   const pad = 16;
+  const labelHeight = 12;
+  const labelGap = 3;
   const balances = points.map((point) => point.balance);
   const min = Math.min(...balances, STARTING_COINS);
   const max = Math.max(...balances, STARTING_COINS);
   const spread = Math.max(1, max - min);
   let lastDateLabel = '';
 
-  return points.map((point, index) => {
+  const items = points.map((point, index) => {
     const x = points.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (points.length - 1);
     const y = plotBottom - ((point.balance - min) / spread) * (plotBottom - plotTop);
-    const previousX = index > 0 ? pad + ((index - 1) * (width - pad * 2)) / Math.max(1, points.length - 1) : -Infinity;
-    const nextX = index < points.length - 1 ? pad + ((index + 1) * (width - pad * 2)) / Math.max(1, points.length - 1) : Infinity;
     const dateLabel = graphDateLabel(point.at);
     const showDate = dateLabel && dateLabel !== lastDateLabel;
     if (dateLabel) lastDateLabel = dateLabel;
+    const valueText = String(point.balance);
+    const labelWidth = valueText.length * 4.6 + 4;
     return {
       ...point,
       x,
       y,
       dateLabel,
       showDate,
-      showValue: Math.min(x - previousX, nextX - x) >= 42 || points.length <= 6,
+      valueText,
+      labelBox: {
+        left: x - labelWidth / 2,
+        right: x + labelWidth / 2,
+        top: Math.max(12, y - 9) - labelHeight,
+        bottom: Math.max(12, y - 9),
+      },
+      showValue: true,
+    };
+  });
+
+  return items.map((item, index) => {
+    const overlapsPrevious = index > 0 && boxesOverlap_(item.labelBox, items[index - 1].labelBox, labelGap);
+    const overlapsNext = index < items.length - 1 && boxesOverlap_(item.labelBox, items[index + 1].labelBox, labelGap);
+    return {
+      ...item,
+      showValue: !overlapsPrevious && !overlapsNext,
     };
   });
 });
@@ -641,6 +659,10 @@ function graphDateLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function boxesOverlap_(a: { left: number; right: number; top: number; bottom: number }, b: { left: number; right: number; top: number; bottom: number }, gap = 0) {
+  return a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top;
 }
 
 function formatOdds(value: number | string | '') {
