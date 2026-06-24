@@ -1208,7 +1208,7 @@ function sideOddsId_(matchId, marketType, outcomeKey, line) {
 function sanitizeSideOddsOption_(option) {
   if (!option || !option.marketType || !option.outcomeKey) return null;
   var clean = {
-    marketType: String(option.marketType || ''),
+    marketType: normalizeMarketType_(option.marketType, option),
     marketLabel: String(option.marketLabel || ''),
     outcomeKey: String(option.outcomeKey || ''),
     outcomeLabel: String(option.outcomeLabel || ''),
@@ -1246,13 +1246,14 @@ function sanitizeSideOddsOption_(option) {
 
 function isValidSideOddsRow_(row) {
   if (!row || !row.marketType || !row.outcomeKey || row.odds === '') return false;
-  if (row.marketType === 'total') {
+  var marketType = normalizeMarketType_(row.marketType, row);
+  if (marketType === 'total') {
     return !!overUnderKey_(firstPresent_([row.outcomeKey, row.outcomeLabel])) && parseBetLine_(firstPresent_([row.line, row.outcomeLabel, row.outcomeKey])) !== '';
   }
-  if (row.marketType === 'handicap') {
+  if (marketType === 'handicap') {
     return parseBetLine_(firstPresent_([row.line, row.outcomeLabel, row.outcomeKey])) !== '';
   }
-  if (row.marketType !== 'correct_score') return true;
+  if (marketType !== 'correct_score') return true;
   return Boolean(parseScoreOutcomeLabel_(firstPresent_([
     row.outcomeLabel,
     row.line,
@@ -1706,7 +1707,28 @@ function payoutForPrediction_(prediction, match) {
 }
 
 function predictionMarketType_(prediction) {
-  return prediction.marketType || 'h2h';
+  return normalizeMarketType_(prediction.marketType, prediction) || 'h2h';
+}
+
+function normalizeMarketType_(marketType, row) {
+  var key = String(marketType || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+  var label = String(firstPresent_([
+    row && row.marketLabel,
+    row && row.outcomeLabel,
+    row && row.predictedResult,
+    row && row.outcomeKey,
+  ]) || '').trim().toLowerCase();
+
+  if (['h2h', 'winner', 'match winner', 'match result', 'moneyline', 'ml', '1x2'].indexOf(key) >= 0) return 'h2h';
+  if (['total', 'totals', 'over under', 'over / under', 'over/under'].indexOf(key) >= 0) return 'total';
+  if (key.indexOf('over') >= 0 || key.indexOf('under') >= 0) return 'total';
+  if (['handicap', 'spread', 'spreads'].indexOf(key) >= 0) return 'handicap';
+  if (key === 'correct score' || key === 'correctscore' || key === 'exact score') return 'correct_score';
+
+  if (overUnderKey_(label)) return 'total';
+  if (label.indexOf('handicap') >= 0 || label.indexOf('spread') >= 0) return 'handicap';
+  if (label.indexOf('correct score') >= 0 || parseScoreOutcomeLabel_(label)) return 'correct_score';
+  return key || '';
 }
 
 function evaluatePrediction_(prediction, match) {
@@ -1938,7 +1960,7 @@ function publicSideOdds_(matchId, oddsRows) {
     var clean = sanitizeSideOddsOption_(row) || row;
     return {
       optionId: row.oddsId,
-      marketType: clean.marketType,
+      marketType: normalizeMarketType_(clean.marketType, clean),
       marketLabel: clean.marketLabel,
       outcomeKey: clean.outcomeKey,
       outcomeLabel: clean.outcomeLabel,
