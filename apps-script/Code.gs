@@ -1214,6 +1214,21 @@ function sanitizeSideOddsOption_(option) {
     outcomeLabel: String(option.outcomeLabel || ''),
     line: option.line == null ? '' : option.line,
   };
+  if (clean.marketType === 'total') {
+    var direction = overUnderKey_(firstPresent_([clean.outcomeKey, clean.outcomeLabel]));
+    var totalLine = parseBetLine_(firstPresent_([clean.line, clean.outcomeLabel, clean.outcomeKey]));
+    if (!direction || totalLine === '') return null;
+    clean.marketLabel = clean.marketLabel || 'Over / Under';
+    clean.outcomeKey = direction;
+    clean.outcomeLabel = capitalize_(direction) + ' ' + totalLine;
+    clean.line = totalLine;
+  }
+  if (clean.marketType === 'handicap') {
+    var handicapLine = parseBetLine_(firstPresent_([clean.line, clean.outcomeLabel, clean.outcomeKey]));
+    if (handicapLine === '') return null;
+    clean.marketLabel = clean.marketLabel || 'Handicap';
+    clean.line = handicapLine;
+  }
   if (clean.marketType === 'correct_score') {
     var score = parseScoreOutcomeLabel_(firstPresent_([
       clean.outcomeLabel,
@@ -1231,6 +1246,12 @@ function sanitizeSideOddsOption_(option) {
 
 function isValidSideOddsRow_(row) {
   if (!row || !row.marketType || !row.outcomeKey || row.odds === '') return false;
+  if (row.marketType === 'total') {
+    return !!overUnderKey_(firstPresent_([row.outcomeKey, row.outcomeLabel])) && parseBetLine_(firstPresent_([row.line, row.outcomeLabel, row.outcomeKey])) !== '';
+  }
+  if (row.marketType === 'handicap') {
+    return parseBetLine_(firstPresent_([row.line, row.outcomeLabel, row.outcomeKey])) !== '';
+  }
   if (row.marketType !== 'correct_score') return true;
   return Boolean(parseScoreOutcomeLabel_(firstPresent_([
     row.outcomeLabel,
@@ -1265,6 +1286,17 @@ function signedLine_(line) {
   var n = Number(line);
   if (!Number.isFinite(n)) return String(line || '');
   return n > 0 ? '+' + n : String(n);
+}
+
+function parseBetLine_(value) {
+  if (value == null || value === '') return '';
+  var direct = Number(value);
+  if (Number.isFinite(direct)) return direct;
+  var text = String(value || '').trim();
+  var match = text.match(/[+-]?\d+(?:\.\d+)?/);
+  if (!match) return '';
+  var parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : '';
 }
 
 function capitalize_(value) {
@@ -1688,17 +1720,30 @@ function evaluatePrediction_(prediction, match) {
 
   if (marketType === 'total') {
     var total = homeScore + awayScore;
-    var totalLine = Number(prediction.line);
-    if (!Number.isFinite(totalLine)) return 'lost';
+    var totalDirection = overUnderKey_(firstPresent_([
+      prediction.predictedResult,
+      prediction.outcomeLabel,
+    ]));
+    var totalLine = parseBetLine_(firstPresent_([
+      prediction.line,
+      prediction.outcomeLabel,
+      prediction.marketLabel,
+      prediction.predictedResult,
+    ]));
+    if (totalLine === '') return 'pending';
     if (total === totalLine) return 'void';
-    if (prediction.predictedResult === 'over') return total > totalLine ? 'won' : 'lost';
-    if (prediction.predictedResult === 'under') return total < totalLine ? 'won' : 'lost';
+    if (totalDirection === 'over') return total > totalLine ? 'won' : 'lost';
+    if (totalDirection === 'under') return total < totalLine ? 'won' : 'lost';
     return 'lost';
   }
 
   if (marketType === 'handicap') {
-    var line = Number(prediction.line);
-    if (!Number.isFinite(line)) return 'lost';
+    var line = parseBetLine_(firstPresent_([
+      prediction.line,
+      prediction.outcomeLabel,
+      prediction.marketLabel,
+    ]));
+    if (line === '') return 'pending';
     var adjustedHome = homeScore + (prediction.predictedResult === 'home' ? line : 0);
     var adjustedAway = awayScore + (prediction.predictedResult === 'away' ? line : 0);
     if (adjustedHome === adjustedAway) return 'void';

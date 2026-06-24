@@ -151,6 +151,20 @@ function payoutText(entry: BetHistoryEntry) {
   if (!Number.isFinite(stake) || !Number.isFinite(odds) || stake <= 0 || odds <= 0) return '-';
   return `${Math.floor(stake * odds)} coins`;
 }
+
+function settlementLabel(entry: BetHistoryEntry) {
+  if (entry.resultStatus === 'won') return 'Payout';
+  if (entry.resultStatus === 'lost') return 'Lost';
+  if (entry.resultStatus === 'void') return 'Returned';
+  return 'Potential';
+}
+
+function settlementText(entry: BetHistoryEntry) {
+  const stake = Math.max(0, Math.floor(Number(entry.tokenAmount || 0)));
+  if (entry.resultStatus === 'lost') return `${stake} coins`;
+  if (entry.resultStatus === 'void') return `${stake} coins`;
+  return payoutText(entry);
+}
 </script>
 
 <template>
@@ -264,8 +278,8 @@ function payoutText(entry: BetHistoryEntry) {
             <strong>{{ formatOdds(entry.oddsAtPrediction) }}</strong>
           </span>
           <span>
-            <small>Payout</small>
-            <strong>{{ payoutText(entry) }}</strong>
+            <small>{{ settlementLabel(entry) }}</small>
+            <strong>{{ settlementText(entry) }}</strong>
           </span>
           <span>
             <small>Result</small>

@@ -656,6 +656,20 @@ function payoutText(entry: BetHistoryEntry) {
   return `${Math.floor(stake * odds)} coins`;
 }
 
+function settlementLabel(entry: BetHistoryEntry) {
+  if (entry.resultStatus === 'won') return 'Payout';
+  if (entry.resultStatus === 'lost') return 'Lost';
+  if (entry.resultStatus === 'void') return 'Returned';
+  return 'Potential';
+}
+
+function settlementText(entry: BetHistoryEntry) {
+  const stake = Math.max(0, Math.floor(Number(entry.tokenAmount || 0)));
+  if (entry.resultStatus === 'lost') return `${stake} coins`;
+  if (entry.resultStatus === 'void') return `${stake} coins`;
+  return payoutText(entry);
+}
+
 function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
@@ -862,8 +876,8 @@ function errorText(err: unknown) {
                 <strong>{{ formatOdds(entry.oddsAtPrediction) }}</strong>
               </span>
               <span>
-                <small>Payout</small>
-                <strong>{{ payoutText(entry) }}</strong>
+                <small>{{ settlementLabel(entry) }}</small>
+                <strong>{{ settlementText(entry) }}</strong>
               </span>
               <span>
                 <small>Result</small>
@@ -961,7 +975,7 @@ function errorText(err: unknown) {
             <div v-else class="profile-list">
               <article v-for="entry in selectedUserBets" :key="entry.predictionId" :class="{ won: entry.resultStatus === 'won', lost: entry.resultStatus === 'lost', returned: entry.resultStatus === 'void' }">
                 <strong>{{ entry.matchLabel }}</strong>
-                <span>{{ entry.marketLabel || 'Pick' }} - {{ entry.token }} - {{ entry.tokenAmount }} coins - {{ formatOdds(entry.oddsAtPrediction) }} odds - Payout {{ payoutText(entry) }}</span>
+                <span>{{ entry.marketLabel || 'Pick' }} - {{ entry.token }} - {{ entry.tokenAmount }} coins - {{ formatOdds(entry.oddsAtPrediction) }} odds - {{ settlementLabel(entry) }} {{ settlementText(entry) }}</span>
                 <small>{{ statusText(entry.resultStatus) }} · {{ formatKickoff(entry.updatedAt || entry.kickoffAt) }}</small>
               </article>
             </div>
